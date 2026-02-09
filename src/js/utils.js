@@ -23,7 +23,33 @@
  * ```
  * */
 export function calcTileType(index, boardSize) {
-  // TODO: ваш код будет тут
+  // Проверка на верхнюю строку
+  if (index < boardSize) {
+    // Верхний левый угол
+    if (index === 0) return 'top-left';
+    // Верхний правый угол
+    if (index === boardSize - 1) return 'top-right';
+    // Верхняя граница
+    return 'top';
+  }
+
+  // Проверка на нижнюю строку
+  if (index >= boardSize * (boardSize - 1)) {
+    // Нижний левый угол
+    if (index === boardSize * (boardSize - 1)) return 'bottom-left';
+    // Нижний правый угол
+    if (index === boardSize * boardSize - 1) return 'bottom-right';
+    // Нижняя граница
+    return 'bottom';
+  }
+
+  // Проверка на левый столбец
+  if (index % boardSize === 0) return 'left';
+
+  // Проверка на правый столбец
+  if (index % boardSize === boardSize - 1) return 'right';
+
+  // Все остальные ячейки
   return 'center';
 }
 
