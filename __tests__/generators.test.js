@@ -13,7 +13,8 @@ describe('characterGenerator', () => {
     const characters = new Set();
 
     // Генерируем 100 персонажей
-    for (let i = 0; i < 100; i++) {
+    const iterations = 100;
+    for (let i = 0; i < iterations; i++) {
       const character = generator.next().value;
       characters.add(character);
 
@@ -42,11 +43,11 @@ describe('generateTeam', () => {
     expect(team.size).toBe(characterCount);
 
     // Проверяем каждого персонажа в команде
-    for (const character of team) {
+    Array.from(team).forEach((character) => {
       expect(allowedTypes.some((Type) => character instanceof Type)).toBe(true);
       expect(character.level).toBeGreaterThanOrEqual(1);
       expect(character.level).toBeLessThanOrEqual(maxLevel);
-    }
+    });
   });
 
   test('should generate team with correct level distribution', () => {

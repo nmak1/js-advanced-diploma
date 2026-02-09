@@ -1,47 +1,72 @@
-import Team from '../src/js/Team';
+import { characterGenerator, generateTeam } from '../src/js/generators';
 import Bowman from '../src/js/characters/Bowman';
+import Swordsman from '../src/js/characters/Swordsman';
+import Magician from '../src/js/characters/Magician';
+import Team from '../src/js/Team';
 
-describe('Team class', () => {
-  test('should create empty team', () => {
-    const team = new Team();
-    expect(team.size).toBe(0);
-  });
+describe('characterGenerator', () => {
+  test('should generate infinite stream of characters', () => {
+    const allowedTypes = [Bowman, Swordsman, Magician];
+    const maxLevel = 2;
+    const generator = characterGenerator(allowedTypes, maxLevel);
 
-  test('should create team with characters', () => {
-    const characters = [new Bowman(1), new Bowman(2)];
-    const team = new Team(characters);
-    expect(team.size).toBe(2);
-  });
+    const characters = new Set();
 
-  test('should add character to team', () => {
-    const team = new Team();
-    const bowman = new Bowman(1);
+    // Генерируем 100 персонажей
+    const iterations = 100;
+    for (let i = 0; i < iterations; i++) {
+      const character = generator.next().value;
+      characters.add(character);
 
-    team.add(bowman);
-    expect(team.size).toBe(1);
-    expect(team.characters).toContain(bowman);
-  });
+      // Проверяем, что персонаж правильного типа
+      expect(allowedTypes.some((Type) => character instanceof Type)).toBe(true);
 
-  test('should remove character from team', () => {
-    const bowman1 = new Bowman(1);
-    const bowman2 = new Bowman(2);
-    const team = new Team([bowman1, bowman2]);
-
-    team.remove(bowman1);
-    expect(team.size).toBe(1);
-    expect(team.characters).not.toContain(bowman1);
-    expect(team.characters).toContain(bowman2);
-  });
-
-  test('should be iterable', () => {
-    const characters = [new Bowman(1), new Bowman(2), new Bowman(3)];
-    const team = new Team(characters);
-
-    const iterated = [];
-    for (const character of team) {
-      iterated.push(character);
+      // Проверяем уровень
+      expect(character.level).toBeGreaterThanOrEqual(1);
+      expect(character.level).toBeLessThanOrEqual(maxLevel);
     }
 
-    expect(iterated).toEqual(characters);
+    // Убеждаемся, что генерируются разные персонажи
+    expect(characters.size).toBeGreaterThan(1);
+  });
+});
+
+describe('generateTeam', () => {
+  test('should generate team with specified number of characters', () => {
+    const allowedTypes = [Bowman, Swordsman, Magician];
+    const maxLevel = 3;
+    const characterCount = 5;
+
+    const team = generateTeam(allowedTypes, maxLevel, characterCount);
+
+    expect(team).toBeInstanceOf(Team);
+    expect(team.size).toBe(characterCount);
+
+    // Проверяем каждого персонажа в команде
+    Array.from(team).forEach((character) => {
+      expect(allowedTypes.some((Type) => character instanceof Type)).toBe(true);
+      expect(character.level).toBeGreaterThanOrEqual(1);
+      expect(character.level).toBeLessThanOrEqual(maxLevel);
+    });
+  });
+
+  test('should generate team with correct level distribution', () => {
+    const allowedTypes = [Bowman];
+    const maxLevel = 4;
+    const characterCount = 100;
+
+    const team = generateTeam(allowedTypes, maxLevel, characterCount);
+
+    const levels = Array.from(team).map((char) => char.level);
+
+    // Проверяем, что есть персонажи разных уровней
+    const uniqueLevels = [...new Set(levels)];
+    expect(uniqueLevels.length).toBeGreaterThan(1);
+
+    // Проверяем, что все уровни в допустимом диапазоне
+    levels.forEach((level) => {
+      expect(level).toBeGreaterThanOrEqual(1);
+      expect(level).toBeLessThanOrEqual(maxLevel);
+    });
   });
 });

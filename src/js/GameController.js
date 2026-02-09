@@ -19,7 +19,12 @@ export default class GameController {
     this.playerPositions = [];
     this.enemyPositions = [];
     this.selectedCell = null;
-    this.currentPlayer = 'player'; // 'player' или 'computer'
+    this.selectedCharacter = null;
+    this.gameState = {
+      level: 1,
+      turn: 'player',
+      score: 0,
+    };
   }
 
   init() {
@@ -64,73 +69,99 @@ export default class GameController {
 
     // Размещаем персонажей игрока
     let playerIndex = 0;
-    for (const character of this.playerTeam) {
-      const row = Math.floor(playerIndex / 2) * 2; // Размещаем по 2 в строке
+    this.playerTeam.characters.forEach((character) => {
+      const row = Math.floor(playerIndex / 2) * 2;
       const col = playerColumns[playerIndex % 2];
       const position = row * 8 + col;
 
       this.playerPositions.push(new PositionedCharacter(character, position));
       playerIndex++;
-    }
+    });
 
     // Размещаем персонажей противника
     let enemyIndex = 0;
-    for (const character of this.enemyTeam) {
+    this.enemyTeam.characters.forEach((character) => {
       const row = Math.floor(enemyIndex / 2) * 2;
       const col = enemyColumns[enemyIndex % 2];
       const position = row * 8 + col;
 
       this.enemyPositions.push(new PositionedCharacter(character, position));
       enemyIndex++;
-    }
+    });
   }
 
   redraw() {
-    // Объединяем все позиции для отрисовки
     const allPositions = [...this.playerPositions, ...this.enemyPositions];
     this.gamePlay.redrawPositions(allPositions);
   }
 
   getCharacterAtPosition(index) {
-    // Ищем персонажа игрока
     const playerChar = this.playerPositions.find((pos) => pos.position === index);
     if (playerChar) {
-      return { character: playerChar.character, type: 'player' };
+      return { character: playerChar.character, type: 'player', positionedChar: playerChar };
     }
 
-    // Ищем персонажа противника
     const enemyChar = this.enemyPositions.find((pos) => pos.position === index);
     if (enemyChar) {
-      return { character: enemyChar.character, type: 'enemy' };
+      return { character: enemyChar.character, type: 'enemy', positionedChar: enemyChar };
     }
 
     return null;
   }
 
   onCellClick(index) {
-    // TODO: react to click (будет реализовано в следующей задаче)
-    console.log('Cell clicked:', index);
+    if (this.gameState.turn !== 'player') {
+      this.gamePlay.showError('Сейчас ход противника!');
+      return;
+    }
+
+    const charInfo = this.getCharacterAtPosition(index);
+
+    if (charInfo) {
+      if (charInfo.type === 'player') {
+        if (this.selectedCell === index) {
+          this.gamePlay.deselectCell(this.selectedCell);
+          this.selectedCell = null;
+          this.selectedCharacter = null;
+        } else {
+          if (this.selectedCell !== null) {
+            this.gamePlay.deselectCell(this.selectedCell);
+          }
+          this.selectedCell = index;
+          this.selectedCharacter = charInfo.character;
+          this.gamePlay.selectCell(index, 'yellow');
+        }
+      } else {
+        this.gamePlay.showError('Нельзя выбрать персонажа противника!');
+      }
+    } else if (this.selectedCell !== null) {
+      this.gamePlay.deselectCell(this.selectedCell);
+      this.selectedCell = null;
+      this.selectedCharacter = null;
+    }
   }
 
   onCellEnter(index) {
     const charInfo = this.getCharacterAtPosition(index);
 
     if (charInfo) {
-      // Показываем информацию о персонаже
       const formattedInfo = formatCharacterInfo(charInfo.character);
       this.gamePlay.showCellTooltip(formattedInfo, index);
 
-      // Устанавливаем курсор pointer при наведении на персонажа
-      this.gamePlay.setCursor(cursors.pointer);
+      if (charInfo.type === 'player') {
+        this.gamePlay.setCursor(cursors.pointer);
+      } else if (this.gameState.turn === 'player') {
+        this.gamePlay.setCursor(cursors.notallowed);
+      } else {
+        this.gamePlay.setCursor(cursors.pointer);
+      }
     } else {
-      // Скрываем tooltip и устанавливаем стандартный курсор
       this.gamePlay.hideCellTooltip(index);
       this.gamePlay.setCursor(cursors.auto);
     }
   }
 
   onCellLeave(index) {
-    // Скрываем tooltip при уходе мыши с ячейки
     this.gamePlay.hideCellTooltip(index);
     this.gamePlay.setCursor(cursors.auto);
   }

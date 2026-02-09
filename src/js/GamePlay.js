@@ -53,7 +53,8 @@ export default class GamePlay {
     this.boardEl.classList.add(theme);
     for (let i = 0; i < this.boardSize ** 2; i += 1) {
       const cellEl = document.createElement('div');
-      cellEl.classList.add('cell', 'map-tile', `map-tile-${calcTileType(i, this.boardSize)}`);
+      const tileType = calcTileType(i, this.boardSize);
+      cellEl.classList.add('cell', 'map-tile', `map-tile-${tileType}`);
       cellEl.addEventListener('mouseenter', (event) => this.onCellEnter(event));
       cellEl.addEventListener('mouseleave', (event) => this.onCellLeave(event));
       cellEl.addEventListener('click', (event) => this.onCellClick(event));
@@ -69,11 +70,11 @@ export default class GamePlay {
    * @param positions array of PositionedCharacter objects
    */
   redrawPositions(positions) {
-    for (const cell of this.cells) {
+    this.cells.forEach((cell) => {
       cell.innerHTML = '';
-    }
+    });
 
-    for (const position of positions) {
+    positions.forEach((position) => {
       const cellEl = this.boardEl.children[position.position];
       const charEl = document.createElement('div');
       charEl.classList.add('character', position.character.type);
@@ -82,13 +83,17 @@ export default class GamePlay {
       healthEl.classList.add('health-level');
 
       const healthIndicatorEl = document.createElement('div');
-      healthIndicatorEl.classList.add('health-level-indicator', `health-level-indicator-${calcHealthLevel(position.character.health)}`);
+      const healthLevel = calcHealthLevel(position.character.health);
+      healthIndicatorEl.classList.add(
+        'health-level-indicator',
+        `health-level-indicator-${healthLevel}`,
+      );
       healthIndicatorEl.style.width = `${position.character.health}%`;
       healthEl.appendChild(healthIndicatorEl);
 
       charEl.appendChild(healthEl);
       cellEl.appendChild(charEl);
-    }
+    });
   }
 
   /**
