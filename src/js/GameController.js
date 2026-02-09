@@ -20,11 +20,6 @@ export default class GameController {
     this.enemyPositions = [];
     this.selectedCell = null;
     this.currentPlayer = 'player'; // 'player' или 'computer'
-    this.gameState = {
-      level: 1,
-      turn: 'player',
-      score: 0,
-    };
   }
 
   init() {
@@ -100,55 +95,21 @@ export default class GameController {
     // Ищем персонажа игрока
     const playerChar = this.playerPositions.find((pos) => pos.position === index);
     if (playerChar) {
-      return { character: playerChar.character, type: 'player', positionedChar: playerChar };
+      return { character: playerChar.character, type: 'player' };
     }
 
     // Ищем персонажа противника
     const enemyChar = this.enemyPositions.find((pos) => pos.position === index);
     if (enemyChar) {
-      return { character: enemyChar.character, type: 'enemy', positionedChar: enemyChar };
+      return { character: enemyChar.character, type: 'enemy' };
     }
 
     return null;
   }
 
   onCellClick(index) {
-    // Проверяем, чей сейчас ход
-    if (this.gameState.turn !== 'player') {
-      GamePlay.showError('Сейчас ход противника!');
-      return;
-    }
-
-    const charInfo = this.getCharacterAtPosition(index);
-
-    if (charInfo) {
-      // Если кликнули на персонажа
-      if (charInfo.type === 'player') {
-        // Если кликнули на своего персонажа - выделяем его
-        if (this.selectedCell === index) {
-          // Если уже выделен - снимаем выделение
-          this.gamePlay.deselectCell(this.selectedCell);
-          this.selectedCell = null;
-        } else {
-          // Если другой персонаж - выделяем его
-          if (this.selectedCell !== null) {
-            this.gamePlay.deselectCell(this.selectedCell);
-          }
-          this.selectedCell = index;
-          this.gamePlay.selectCell(index, 'yellow');
-        }
-      } else {
-        // Если кликнули на персонажа противника - ошибка
-        GamePlay.showError('Нельзя выбрать персонажа противника!');
-      }
-    } else {
-      // Если кликнули на пустую клетку
-      if (this.selectedCell !== null) {
-        // Если есть выделенный персонаж - снимаем выделение
-        this.gamePlay.deselectCell(this.selectedCell);
-        this.selectedCell = null;
-      }
-    }
+    // TODO: react to click (будет реализовано в следующей задаче)
+    console.log('Cell clicked:', index);
   }
 
   onCellEnter(index) {
@@ -159,27 +120,12 @@ export default class GameController {
       const formattedInfo = formatCharacterInfo(charInfo.character);
       this.gamePlay.showCellTooltip(formattedInfo, index);
 
-      // Устанавливаем курсор в зависимости от типа персонажа
-      if (charInfo.type === 'player') {
-        // На своих персонажей - pointer
-        this.gamePlay.setCursor(cursors.pointer);
-      } else {
-        // На персонажей противника - notallowed (если не наш ход)
-        if (this.gameState.turn === 'player') {
-          this.gamePlay.setCursor(cursors.notallowed);
-        } else {
-          this.gamePlay.setCursor(cursors.pointer);
-        }
-      }
+      // Устанавливаем курсор pointer при наведении на персонажа
+      this.gamePlay.setCursor(cursors.pointer);
     } else {
       // Скрываем tooltip и устанавливаем стандартный курсор
       this.gamePlay.hideCellTooltip(index);
-      if (this.selectedCell !== null) {
-        // Если есть выделенный персонаж, проверяем можно ли на эту клетку
-        this.gamePlay.setCursor(cursors.auto);
-      } else {
-        this.gamePlay.setCursor(cursors.auto);
-      }
+      this.gamePlay.setCursor(cursors.auto);
     }
   }
 
