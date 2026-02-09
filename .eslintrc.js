@@ -15,5 +15,7 @@ module.exports = {
     'no-alert': 'off',
     'import/extensions': 'off',
     'no-param-reassign': 'off',
+    'max-classes-per-file': 'off',
+    'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
   },
 };

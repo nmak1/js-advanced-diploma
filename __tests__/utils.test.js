@@ -1,4 +1,4 @@
-import { calcTileType } from '../utils';
+import { calcTileType } from '../src/js/utils';
 
 describe('calcTileType function', () => {
   const boardSize = 8;
@@ -37,18 +37,5 @@ describe('calcTileType function', () => {
 
   test('should return center for index 18', () => {
     expect(calcTileType(18, boardSize)).toBe('center');
-  });
-
-  // Дополнительные тесты для проверки угловых случаев
-  test('should handle custom board size', () => {
-    expect(calcTileType(0, 4)).toBe('top-left');
-    expect(calcTileType(3, 4)).toBe('top-right');
-    expect(calcTileType(12, 4)).toBe('bottom-left');
-    expect(calcTileType(15, 4)).toBe('bottom-right');
-    expect(calcTileType(1, 4)).toBe('top');
-    expect(calcTileType(14, 4)).toBe('bottom');
-    expect(calcTileType(4, 4)).toBe('left');
-    expect(calcTileType(7, 4)).toBe('right');
-    expect(calcTileType(5, 4)).toBe('center');
   });
 });

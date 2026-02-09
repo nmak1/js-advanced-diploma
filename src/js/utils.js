@@ -63,4 +63,14 @@ export function calcHealthLevel(health) {
   }
 
   return 'high';
+}/**
+ * Форматирует информацию о персонаже для отображения в tooltip
+ * @param character объект персонажа
+ * @returns строка в формате "🎖1 ⚔10 🛡40 ❤50"
+ */
+export function formatCharacterInfo(character) {
+  const {
+    level, attack, defence, health,
+  } = character;
+  return `🎖${level} ⚔${attack} 🛡${defence} ❤${health}`;
 }
