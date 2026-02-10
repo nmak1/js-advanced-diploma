@@ -46,8 +46,9 @@ export default class GameController {
     const playerTypes = [Bowman, Swordsman, Magician];
     const enemyTypes = [Vampire, Undead, Daemon];
 
-    this.playerTeam = generateTeam(playerTypes, 1, 2);
-    this.enemyTeam = generateTeam(enemyTypes, 1, 2);
+    // Генерируем больше персонажей для тестирования
+    this.playerTeam = generateTeam(playerTypes, 1, 4);
+    this.enemyTeam = generateTeam(enemyTypes, 1, 4);
   }
 
   positionTeams() {
@@ -57,18 +58,20 @@ export default class GameController {
     const playerColumns = [0, 1];
     const enemyColumns = [6, 7];
 
+    // Размещаем персонажей игрока в столбцах 0 и 1
     let playerIndex = 0;
     this.playerTeam.characters.forEach((character) => {
-      const row = Math.floor(playerIndex / 2) * 2;
+      const row = Math.floor(playerIndex / 2);
       const col = playerColumns[playerIndex % 2];
       const position = row * 8 + col;
       this.playerPositions.push(new PositionedCharacter(character, position));
       playerIndex++;
     });
 
+    // Размещаем персонажей противника в столбцах 6 и 7
     let enemyIndex = 0;
     this.enemyTeam.characters.forEach((character) => {
-      const row = Math.floor(enemyIndex / 2) * 2;
+      const row = Math.floor(enemyIndex / 2);
       const col = enemyColumns[enemyIndex % 2];
       const position = row * 8 + col;
       this.enemyPositions.push(new PositionedCharacter(character, position));
@@ -191,12 +194,22 @@ export default class GameController {
     const charInfo = this.getCharacterAtPosition(fromIndex);
     if (!charInfo) return;
 
+    // Обновляем позицию персонажа
     charInfo.positionedChar.position = toIndex;
 
+    // Снимаем выделение
     this.deselectCharacter();
+
+    // Перерисовываем поле
     this.redraw();
 
+    // Передаем ход противнику
     this.gameState.turn = 'computer';
+
+    // Логируем перемещение
+    console.log(`Персонаж ${charInfo.character.type} перемещен с ${fromIndex} на ${toIndex}`);
+
+    // Ход компьютера
     this.computerTurn();
   }
 
@@ -212,12 +225,17 @@ export default class GameController {
     // Рассчитываем урон
     const damage = Math.max(attacker.attack - target.defence, attacker.attack * 0.1);
 
+    // Логируем атаку
+    console.log(`${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
+
     // Наносим урон
     target.health -= damage;
 
     // Проверяем смерть персонажа
     if (target.health <= 0) {
       target.health = 0;
+      console.log(`${target.type} погиб!`);
+
       if (targetInfo.type === 'enemy') {
         this.enemyPositions = this.enemyPositions.filter((pos) => pos.position !== toIndex);
       } else {
@@ -229,9 +247,29 @@ export default class GameController {
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
       this.redraw();
       this.deselectCharacter();
+
+      // Проверяем окончание игры
+      if (this.checkGameEnd()) {
+        return;
+      }
+
       this.gameState.turn = 'computer';
       this.computerTurn();
     });
+  }
+
+  checkGameEnd() {
+    if (this.playerPositions.length === 0) {
+      this.gamePlay.showError('Игра окончена! Вы проиграли!');
+      return true;
+    }
+
+    if (this.enemyPositions.length === 0) {
+      this.gamePlay.showError('Поздравляем! Вы победили!');
+      return true;
+    }
+
+    return false;
   }
 
   onCellEnter(index) {
@@ -304,11 +342,120 @@ export default class GameController {
         });
       });
 
-      // Если не смогли атаковать, передаем ход
+      // Если не смогли атаковать, пытаемся переместиться ближе к игроку
+      if (!actionPerformed) {
+        this.enemyPositions.forEach((enemyPos) => {
+          if (actionPerformed) return;
+
+          // Ищем ближайшего игрока
+          const nearestPlayer = this.findNearestPlayer(enemyPos);
+
+          if (nearestPlayer) {
+            // Пытаемся найти доступную клетку для перемещения ближе к игроку
+            const possibleMoves = this.getPossibleMoves(enemyPos);
+            const bestMove = this.findBestMoveTowardsTarget(enemyPos, nearestPlayer, possibleMoves);
+
+            if (bestMove !== null) {
+              this.performComputerMove(enemyPos.position, bestMove);
+              actionPerformed = true;
+            }
+          }
+        });
+      }
+
+      // Если не смогли сделать ни одного действия, передаем ход
       if (!actionPerformed) {
         this.gameState.turn = 'player';
+        console.log('Компьютер пропускает ход');
       }
     }, 1000);
+  }
+
+  getPossibleMoves(positionedChar) {
+    const possibleMoves = [];
+    const { position, character } = positionedChar;
+
+    // Определяем максимальное расстояние перемещения
+    let maxMove;
+    if (character.type === 'swordsman' || character.type === 'undead') {
+      maxMove = 4;
+    } else if (character.type === 'bowman' || character.type === 'vampire') {
+      maxMove = 2;
+    } else {
+      maxMove = 1; // magician или daemon
+    }
+
+    // Проверяем все клетки в пределах радиуса
+    for (let row = -maxMove; row <= maxMove; row++) {
+      for (let col = -maxMove; col <= maxMove; col++) {
+        const newRow = Math.floor(position / 8) + row;
+        const newCol = (position % 8) + col;
+
+        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+          const newIndex = newRow * 8 + newCol;
+          if (!this.isCellOccupied(newIndex)
+              && Math.max(Math.abs(row), Math.abs(col)) <= maxMove) {
+            possibleMoves.push(newIndex);
+          }
+        }
+      }
+    }
+
+    return possibleMoves;
+  }
+
+  findNearestPlayer(enemyPos) {
+    let nearestPlayer = null;
+    let minDistance = Infinity;
+
+    this.playerPositions.forEach((playerPos) => {
+      const distance = Math.abs(
+        Math.floor(enemyPos.position / 8) - Math.floor(playerPos.position / 8),
+      ) + Math.abs(
+        (enemyPos.position % 8) - (playerPos.position % 8),
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestPlayer = playerPos;
+      }
+    });
+
+    return nearestPlayer;
+  }
+
+  static findBestMoveTowardsTarget(enemyPos, targetPos, possibleMoves) {
+    let bestMove = null;
+    let bestDistance = Infinity;
+
+    const targetIndex = targetPos.position;
+
+    possibleMoves.forEach((moveIndex) => {
+      const distance = Math.abs(
+        Math.floor(moveIndex / 8) - Math.floor(targetIndex / 8),
+      ) + Math.abs(
+        (moveIndex % 8) - (targetIndex % 8),
+      );
+
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestMove = moveIndex;
+      }
+    });
+
+    return bestMove;
+  }
+
+  performComputerMove(fromIndex, toIndex) {
+    const charInfo = this.getCharacterAtPosition(fromIndex);
+    if (!charInfo) return;
+
+    charInfo.positionedChar.position = toIndex;
+    this.redraw();
+
+    console.log(`Компьютер переместил ${charInfo.character.type} с ${fromIndex} на ${toIndex}`);
+
+    this.gameState.turn = 'player';
   }
 
   performComputerAttack(fromIndex, toIndex) {
@@ -323,13 +470,21 @@ export default class GameController {
     const damage = Math.max(attacker.attack - target.defence, attacker.attack * 0.1);
     target.health -= damage;
 
+    console.log(`Компьютер: ${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
+
     if (target.health <= 0) {
       target.health = 0;
       this.playerPositions = this.playerPositions.filter((pos) => pos.position !== toIndex);
+      console.log(`${target.type} погиб от атаки компьютера!`);
     }
 
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
       this.redraw();
+
+      if (this.checkGameEnd()) {
+        return;
+      }
+
       this.gameState.turn = 'player';
     });
   }
