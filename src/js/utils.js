@@ -21,7 +21,7 @@
  * calcTileType(63, 8); // 'bottom-right'
  * calcTileType(7, 7); // 'left'
  * ```
- * */
+ */
 export function calcTileType(index, boardSize) {
   // Проверка на верхнюю строку
   if (index < boardSize) {
@@ -162,4 +162,87 @@ export function canAttack(fromIndex, toIndex, characterType, boardSize = 8) {
   const distance = getDistance(fromIndex, toIndex, boardSize);
   const maxAttackDistance = getAttackRange(characterType);
   return distance <= maxAttackDistance;
+}
+
+/**
+ * Рассчитывает урон от атаки
+ * @param attacker объект атакующего персонажа
+ * @param target объект цели атаки
+ * @returns расчетный урон
+ */
+export function calculateDamage(attacker, target) {
+  return Math.max(attacker.attack - target.defence, attacker.attack * 0.1);
+}
+
+/**
+ * Проверяет, умер ли персонаж после получения урона
+ * @param character объект персонажа
+ * @returns true, если персонаж мертв
+ */
+export function isCharacterDead(character) {
+  return character.health <= 0;
+}
+
+/**
+ * Применяет урон к персонажу (чистая функция)
+ * @param character объект персонажа
+ * @param damage величина урона
+ * @returns новый объект персонажа с обновленным здоровьем
+ */
+export function applyDamage(character, damage) {
+  return {
+    ...character,
+    health: Math.max(0, character.health - damage),
+  };
+}
+
+/**
+ * Получает возможные цели для атаки из указанной позиции
+ * @param fromIndex индекс атакующего
+ * @param characterType тип атакующего персонажа
+ * @param enemyPositions позиции врагов
+ * @param boardSize размер поля
+ * @returns массив индексов возможных целей
+ */
+export function getAttackTargets(fromIndex, characterType, enemyPositions, boardSize = 8) {
+  const attackRange = getAttackRange(characterType);
+  const targets = [];
+
+  enemyPositions.forEach((enemyPos) => {
+    const distance = getDistance(fromIndex, enemyPos.position, boardSize);
+    if (distance <= attackRange) {
+      targets.push(enemyPos.position);
+    }
+  });
+
+  return targets;
+}
+
+/**
+ * Получает возможные клетки для атаки (для подсветки)
+ * @param fromIndex индекс атакующего
+ * @param characterType тип атакующего персонажа
+ * @param boardSize размер поля
+ * @returns массив индексов клеток в радиусе атаки
+ */
+export function getAttackArea(fromIndex, characterType, boardSize = 8) {
+  const attackRange = getAttackRange(characterType);
+  const attackArea = [];
+
+  const fromRow = Math.floor(fromIndex / boardSize);
+  const fromCol = fromIndex % boardSize;
+
+  for (let row = fromRow - attackRange; row <= fromRow + attackRange; row++) {
+    for (let col = fromCol - attackRange; col <= fromCol + attackRange; col++) {
+      if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+        const toIndex = row * boardSize + col;
+        const distance = getDistance(fromIndex, toIndex, boardSize);
+        if (distance <= attackRange) {
+          attackArea.push(toIndex);
+        }
+      }
+    }
+  }
+
+  return attackArea;
 }

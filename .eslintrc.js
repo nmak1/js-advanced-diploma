@@ -19,5 +19,8 @@ module.exports = {
     'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'no-restricted-syntax': 'off', // Отключаем правило для итераторов
     'max-len': ['error', { code: 120 }], // Увеличиваем максимальную длину строки
+    'no-shadow': ['error', { allow: ['themes'] }], // Разрешаем переопределение 'themes'
+    'class-methods-use-this': 'off', // Отключаем правило для статических методов
   },
+  ignorePatterns: ['dist/', 'node_modules/'], // Игнорируем эти папки
 };

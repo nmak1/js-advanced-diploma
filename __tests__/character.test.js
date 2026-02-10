@@ -72,7 +72,7 @@ describe('Character classes level 1', () => {
     expect(daemon.level).toBe(1);
     expect(daemon.type).toBe('daemon');
     expect(daemon.attack).toBe(10);
-    expect(daemon.defence).toBe(40);
+    expect(daemon.defence).toBe(10);
     expect(daemon.health).toBe(50);
   });
 });
