@@ -1,3 +1,4 @@
+import { AdvancedAI } from './ai';
 import gameThemes from './themes'; // Переименовали импорт
 import Bowman from './characters/Bowman';
 import Swordsman from './characters/Swordsman';
@@ -333,56 +334,83 @@ export default class GameController {
   }
 
   levelUp() {
+    // Проверяем, что враги действительно побеждены
+    if (this.enemyPositions.length > 0) {
+      console.log('Нельзя повышать уровень, пока есть враги!');
+      return;
+    }
+
     // Переход на следующий уровень
     this.gameState.level += 1;
 
+    // Проверяем, не пройдена ли игра
     if (this.gameState.level > 4) {
-      this.gamePlay.showError('Вы прошли все уровни! Игра завершена!');
+      this.gamePlay.showError(`Поздравляем! Вы прошли все уровни! Финальный счет: ${this.gameState.score}`);
       this.blockGame();
       return;
     }
 
-    // Повышаем уровень выживших персонажей
-    this.playerPositions.forEach((pos) => {
-      GameController.levelUpCharacter(pos.character); // Использовали статический метод
-    });
-
-    // Восстанавливаем здоровье
-    this.playerPositions.forEach((pos) => {
-      pos.character.health = Math.min(100, pos.character.health + 80);
-    });
+    // Повышаем уровень всех выживших персонажей игрока
+    this.levelUpAllSurvivors();
 
     // Меняем тему в зависимости от уровня
-    const levelThemes = ['prairie', 'desert', 'arctic', 'mountain'];
-    const theme = levelThemes[this.gameState.level - 1];
-    this.gamePlay.drawUi(theme);
+    this.updateTheme();
 
-    // Создаем новую команду противника
-    const enemyTypes = [Vampire, Undead, Daemon];
-    this.enemyTeam = generateTeam(enemyTypes, this.gameState.level, 4);
-    this.positionTeams();
-    this.redraw();
+    // Создаем новую команду противника с учетом текущего уровня
+    this.createEnemyTeamForLevel();
 
-    // Сбрасываем выделение
+    // Сбрасываем выделение и начинаем новый раунд
     this.deselectCharacter();
-
-    // Начинаем новый раунд
     this.gameState.turn = 'player';
+
     console.log(`Уровень ${this.gameState.level} начат!`);
   }
 
-  static levelUpCharacter(character) {
-    character.level += 1;
+  /**
+   * Повышает уровень всех выживших персонажей игрока
+   */
+  levelUpAllSurvivors() {
+    this.playerPositions.forEach((pos) => {
+      // Сохраняем старый уровень для логирования
+      const oldLevel = pos.character.level;
 
-    // Увеличиваем характеристики
-    const improvement = (80 + character.health) / 100;
-    character.attack = Math.max(character.attack, character.attack * improvement);
-    character.defence = Math.max(character.defence, character.defence * improvement);
+      // Повышаем уровень персонажа используя его собственный метод levelUp
+      pos.character.levelUp();
 
-    // Ограничиваем максимальный уровень
-    if (character.level > 4) {
-      character.level = 4;
-    }
+      console.log(
+        `Персонаж ${pos.character.type} повышен с уровня ${oldLevel} до ${pos.character.level}. ` +
+        `Атака: ${pos.character.attack}, Защита: ${pos.character.defence}, Здоровье: ${pos.character.health}`
+      );
+    });
+  }
+
+  /**
+   * Обновляет тему в зависимости от уровня
+   */
+  updateTheme() {
+    const levelThemes = {
+      1: gameThemes.prairie,
+      2: gameThemes.desert,
+      3: gameThemes.arctic,
+      4: gameThemes.mountain,
+    };
+
+    const theme = levelThemes[this.gameState.level] || gameThemes.prairie;
+    this.gamePlay.drawUi(theme);
+  }
+
+  /**
+   * Создает новую команду противника для текущего уровня
+   */
+  createEnemyTeamForLevel() {
+    const enemyTypes = [Vampire, Undead, Daemon];
+
+    // Количество врагов увеличивается с уровнем
+    const enemyCount = Math.min(3 + this.gameState.level, 6);
+
+    this.enemyTeam = generateTeam(enemyTypes, this.gameState.level, enemyCount);
+    this.positionTeams();
+    this.redraw();
   }
 
   onCellEnter(index) {
@@ -453,56 +481,23 @@ export default class GameController {
     this.gamePlay.setCursor(cursors.auto);
   }
 
-  computerTurn() {
-    // Простая ИИ логика
+    computerTurn() {
+    // Используем улучшенный ИИ
     setTimeout(() => {
-      let actionPerformed = false;
+      const action = AdvancedAI.performComputerTurn(
+        this.enemyPositions,
+        this.playerPositions,
+        8, // boardSize
+      );
 
-      // Пытаемся атаковать
-      this.enemyPositions.forEach((enemyPos) => {
-        if (actionPerformed) return;
-
-        this.playerPositions.forEach((playerPos) => {
-          if (actionPerformed) return;
-
-          if (canAttack(
-            enemyPos.position,
-            playerPos.position,
-            enemyPos.character.type,
-          )) {
-            this.performComputerAttack(enemyPos.position, playerPos.position);
-            actionPerformed = true;
-          }
-        });
-      });
-
-      // Если не смогли атаковать, пытаемся переместиться ближе к игроку
-      if (!actionPerformed) {
-        this.enemyPositions.forEach((enemyPos) => {
-          if (actionPerformed) return;
-
-          // Ищем ближайшего игрока
-          const nearestPlayer = this.findNearestPlayer(enemyPos);
-
-          if (nearestPlayer) {
-            // Пытаемся найти доступную клетку для перемещения ближе к игроку
-            const possibleMoves = this.getPossibleMoves(enemyPos);
-            const bestMove = GameController.findBestMoveTowardsTarget(
-              enemyPos,
-              nearestPlayer,
-              possibleMoves,
-            );
-
-            if (bestMove !== null) {
-              this.performComputerMove(enemyPos.position, bestMove);
-              actionPerformed = true;
-            }
-          }
-        });
-      }
-
-      // Если не смогли сделать ни одного действия, передаем ход
-      if (!actionPerformed) {
+      if (action) {
+        if (action.type === 'attack') {
+          this.performComputerAttack(action.fromPosition, action.toPosition);
+        } else if (action.type === 'move') {
+          this.performComputerMove(action.fromPosition, action.toPosition);
+        }
+      } else {
+        // Если не смогли найти действие, передаем ход
         this.gameState.turn = 'player';
         console.log('Компьютер пропускает ход');
       }
