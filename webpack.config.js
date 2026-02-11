@@ -2,12 +2,12 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
+  mode: 'development',
   entry: './src/index.js',
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.[contenthash].js', // Добавляем хеш для кэширования
-    clean: true, // Очищает dist перед каждой сборкой
-    publicPath: '/js-advanced-diploma/', // Важно для GitHub Pages
+    filename: 'bundle.js',
+    clean: true,
   },
   module: {
     rules: [
@@ -28,9 +28,6 @@ module.exports = {
       {
         test: /\.(png|jpg|gif|svg)$/i,
         type: 'asset/resource',
-        generator: {
-          filename: 'img/[name].[contenthash][ext]', // Сохраняем структуру папок
-        },
       },
     ],
   },
@@ -43,11 +40,18 @@ module.exports = {
     static: {
       directory: path.join(__dirname, 'dist'),
     },
-    compress: true,
     port: 9000,
+    open: true,
     hot: true,
-  },
-  resolve: {
-    extensions: ['.js'],
+    historyApiFallback: true,
+    // ⚠️ ВАЖНО: Отключаем CSP для devServer
+    headers: {
+      "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:9000 ws://localhost:9000; connect-src 'self' ws://localhost:9000 http://localhost:9000;",
+    },
+    // Разрешаем все хосты для dev-сервера
+    allowedHosts: 'all',
+    client: {
+      webSocketURL: 'auto://localhost:9000/ws',
+    },
   },
 };
