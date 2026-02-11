@@ -1,3 +1,6 @@
+import CharacterFactory from './characters/CharacterFactory';
+import PositionedCharacter from './PositionedCharacter';
+
 export default class GameState {
   constructor() {
     this.level = 1;
@@ -9,23 +12,36 @@ export default class GameState {
     this.currentTheme = 'prairie';
   }
 
+  /**
+   * Создает состояние из сохраненного объекта
+   */
   static from(object) {
     if (!object) return null;
-
+    
     const state = new GameState();
     state.level = object.level || 1;
     state.turn = object.turn || 'player';
     state.score = object.score || 0;
     state.maxScore = object.maxScore || 0;
-    state.playerPositions = object.playerPositions || [];
-    state.enemyPositions = object.enemyPositions || [];
     state.currentTheme = object.currentTheme || 'prairie';
-
+    
+    // Восстанавливаем позиции игроков
+    state.playerPositions = (object.playerPositions || []).map(posData => {
+      const character = CharacterFactory.fromJSON(posData.character);
+      return new PositionedCharacter(character, posData.position);
+    });
+    
+    // Восстанавливаем позиции врагов
+    state.enemyPositions = (object.enemyPositions || []).map(posData => {
+      const character = CharacterFactory.fromJSON(posData.character);
+      return new PositionedCharacter(character, posData.position);
+    });
+    
     return state;
   }
 
   /**
-   * Сохраняет текущее состояние в объект для сериализации
+   * Сериализует состояние для сохранения
    */
   toJSON() {
     return {

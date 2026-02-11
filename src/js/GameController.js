@@ -36,14 +36,16 @@ export default class GameController {
   }
 
   init() {
-    this.gamePlay.drawUi(gameThemes.prairie);
-
     // Пытаемся загрузить сохранение
     this.loadGame();
 
     if (this.playerPositions.length === 0) {
       // Если нет сохранения или оно не загрузилось, создаем новую игру
       this.newGame();
+    } else {
+      // Если загрузка прошла успешно, обновляем тему и перерисовываем
+      this.gamePlay.drawUi(this.gameState.currentTheme);
+      this.redraw();
     }
 
     this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
@@ -586,8 +588,26 @@ export default class GameController {
    */
   restoreGameState() {
     console.log('Восстановление состояния игры...');
-    // TODO: Реализовать восстановление персонажей из сохраненных данных
-    // Эта функция будет реализована в задаче 11
+
+    // Восстанавливаем позиции
+    this.playerPositions = this.gameState.playerPositions;
+    this.enemyPositions = this.gameState.enemyPositions;
+
+    // Восстанавливаем тему
+    this.gamePlay.drawUi(this.gameState.currentTheme);
+
+    // Перерисовываем поле
+    this.redraw();
+
+    // Сбрасываем выделение
+    this.deselectCharacter();
+    this.isGameBlocked = false;
+
+    // Восстанавливаем команды для совместимости
+    this.playerTeam = { characters: this.playerPositions.map(p => p.character) };
+    this.enemyTeam = { characters: this.enemyPositions.map(p => p.character) };
+
+    console.log(`Игра восстановлена: Уровень ${this.gameState.level}, Ход: ${this.gameState.turn}, Счет: ${this.gameState.score}`);
   }
 
   /**
