@@ -1,5 +1,5 @@
 import { AdvancedAI } from './ai';
-import gameThemes from './themes'; // Переименовали импорт
+import gameThemes from './themes';
 import Bowman from './characters/Bowman';
 import Swordsman from './characters/Swordsman';
 import Magician from './characters/Magician';
@@ -8,6 +8,7 @@ import Undead from './characters/Undead';
 import Daemon from './characters/Daemon';
 import { generateTeam } from './generators';
 import PositionedCharacter from './PositionedCharacter';
+import GameState from './GameState'; // Добавляем импорт GameState
 import {
   formatCharacterInfo,
   canMove,
@@ -28,25 +29,29 @@ export default class GameController {
     this.enemyPositions = [];
     this.selectedCell = null;
     this.selectedCharacter = null;
-    this.attackArea = []; // Клетки в радиусе атаки
-    this.moveArea = []; // Клетки в радиусе перемещения
-    this.gameState = {
-      level: 1,
-      turn: 'player',
-      score: 0,
-      maxScore: 0,
-    };
+    this.attackArea = [];
+    this.moveArea = [];
+    this.gameState = new GameState();
+    this.isGameBlocked = false;
   }
 
   init() {
-    this.gamePlay.drawUi(gameThemes.prairie); // Использовали переименованный импорт
-    this.createTeams();
-    this.positionTeams();
-    this.redraw();
+    this.gamePlay.drawUi(gameThemes.prairie);
+
+    // Пытаемся загрузить сохранение
+    this.loadGame();
+
+    if (this.playerPositions.length === 0) {
+      // Если нет сохранения или оно не загрузилось, создаем новую игру
+      this.newGame();
+    }
 
     this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
     this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
     this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
+    this.gamePlay.addNewGameListener(this.onNewGameClick.bind(this));
+    this.gamePlay.addSaveGameListener(this.onSaveGameClick.bind(this));
+    this.gamePlay.addLoadGameListener(this.onLoadGameClick.bind(this));
   }
 
   createTeams() {
@@ -121,14 +126,12 @@ export default class GameController {
       return;
     }
 
-    // Обновляем область атаки
     this.attackArea = getAttackArea(
       this.selectedCell,
       this.selectedCharacter.type,
       8,
     );
 
-    // Обновляем область перемещения (все доступные клетки)
     this.moveArea = [];
     for (let i = 0; i < 64; i++) {
       if (this.canMove(i)) {
@@ -138,6 +141,11 @@ export default class GameController {
   }
 
   onCellClick(index) {
+    if (this.isGameBlocked) {
+      this.gamePlay.showError('Игра завершена. Начните новую игру.');
+      return;
+    }
+
     if (this.gameState.turn !== 'player') {
       this.gamePlay.showError('Сейчас ход противника!');
       return;
@@ -170,8 +178,6 @@ export default class GameController {
       this.selectedCell = index;
       this.selectedCharacter = charInfo.character;
       this.gamePlay.selectCell(index, 'yellow');
-
-      // Обновляем области для подсветки
       this.updateSelectedAreas();
     }
   }
@@ -216,7 +222,7 @@ export default class GameController {
 
     const targetChar = this.getCharacterAtPosition(targetIndex);
     if (!targetChar || targetChar.type === 'player') {
-      return false; // Нельзя атаковать своих
+      return false;
     }
 
     return canAttack(this.selectedCell, targetIndex, this.selectedCharacter.type);
@@ -226,25 +232,12 @@ export default class GameController {
     const charInfo = this.getCharacterAtPosition(fromIndex);
     if (!charInfo) return;
 
-    // Обновляем позицию персонажа
     charInfo.positionedChar.position = toIndex;
-
-    // Снимаем выделение
     this.deselectCharacter();
-
-    // Перерисовываем поле
     this.redraw();
-
-    // Обновляем счет
     this.updateScore();
-
-    // Передаем ход противнику
     this.gameState.turn = 'computer';
-
-    // Логируем перемещение
     console.log(`Персонаж ${charInfo.character.type} перемещен с ${fromIndex} на ${toIndex}`);
-
-    // Ход компьютера
     this.computerTurn();
   }
 
@@ -257,21 +250,14 @@ export default class GameController {
     const attacker = attackerInfo.character;
     const target = targetInfo.character;
 
-    // Рассчитываем урон
     const damage = calculateDamage(attacker, target);
-
-    // Логируем атаку
     console.log(`${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
 
-    // Наносим урон
     target.health -= damage;
 
-    // Проверяем смерть персонажа
     if (isCharacterDead(target)) {
       target.health = 0;
       console.log(`${target.type} погиб!`);
-
-      // Обновляем счет за убийство
       this.gameState.score += target.level * 10;
 
       if (targetInfo.type === 'enemy') {
@@ -281,15 +267,11 @@ export default class GameController {
       }
     }
 
-    // Показываем анимацию урона
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
       this.redraw();
       this.deselectCharacter();
-
-      // Обновляем максимальный счет
       this.updateMaxScore();
 
-      // Проверяем окончание игры
       if (this.checkGameEnd()) {
         return;
       }
@@ -300,26 +282,30 @@ export default class GameController {
   }
 
   updateScore() {
-    // Базовые очки за ход
     this.gameState.score += 1;
   }
 
   updateMaxScore() {
     if (this.gameState.score > this.gameState.maxScore) {
       this.gameState.maxScore = this.gameState.score;
+      console.log(`Новый рекорд! Максимальный счет: ${this.gameState.maxScore}`);
     }
   }
 
   checkGameEnd() {
+    if (this.isGameBlocked) return true;
+
     if (this.playerPositions.length === 0) {
-      this.gamePlay.showError(`Игра окончена! Вы проиграли! Очки: ${this.gameState.score}`);
-      this.blockGame();
+      this.gameOver('Поражение');
       return true;
     }
 
     if (this.enemyPositions.length === 0) {
-      this.gamePlay.showError(`Поздравляем! Вы победили! Очки: ${this.gameState.score}`);
-      this.levelUp();
+      if (this.gameState.level >= 4) {
+        this.gameOver('Победа');
+      } else {
+        this.levelUp();
+      }
       return true;
     }
 
@@ -327,56 +313,61 @@ export default class GameController {
   }
 
   blockGame() {
-    // Блокируем игровое поле
-    this.gamePlay.addCellEnterListener(() => {});
-    this.gamePlay.addCellLeaveListener(() => {});
-    this.gamePlay.addCellClickListener(() => {});
+    this.isGameBlocked = true;
+
+    // Очищаем все слушатели
+    this.gamePlay.cellClickListeners = [];
+    this.gamePlay.cellEnterListeners = [];
+    this.gamePlay.cellLeaveListeners = [];
+
+    // Добавляем только слушатели для кнопок
+    this.gamePlay.addNewGameListener(this.onNewGameClick.bind(this));
+    this.gamePlay.addSaveGameListener(this.onSaveGameClick.bind(this));
+    this.gamePlay.addLoadGameListener(this.onLoadGameClick.bind(this));
+
+    this.gamePlay.setCursor('default');
+    console.log('Игра заблокирована');
+  }
+
+  gameOver(reason) {
+    this.isGameBlocked = true;
+    this.blockGame();
+
+    this.updateMaxScore();
+
+    let message = '';
+    if (reason === 'Поражение') {
+      message = `Игра окончена! Вы проиграли! Очки: ${this.gameState.score}`;
+    } else {
+      message = `Поздравляем! Вы прошли все уровни! Финальный счет: ${this.gameState.score}`;
+    }
+
+    message += `\nМаксимальный счет: ${this.gameState.maxScore}`;
+
+    this.gamePlay.showMessage(message);
+    console.log(`Game Over: ${reason}, Score: ${this.gameState.score}, Max Score: ${this.gameState.maxScore}`);
   }
 
   levelUp() {
-    // Проверяем, что враги действительно побеждены
-    if (this.enemyPositions.length > 0) {
-      console.log('Нельзя повышать уровень, пока есть враги!');
+    if (this.gameState.level >= 4) {
+      this.gameOver('Победа');
       return;
     }
 
-    // Переход на следующий уровень
     this.gameState.level += 1;
-
-    // Проверяем, не пройдена ли игра
-    if (this.gameState.level > 4) {
-      this.gamePlay.showError(`Поздравляем! Вы прошли все уровни! Финальный счет: ${this.gameState.score}`);
-      this.blockGame();
-      return;
-    }
-
-    // Повышаем уровень всех выживших персонажей игрока
     this.levelUpAllSurvivors();
-
-    // Меняем тему в зависимости от уровня
     this.updateTheme();
-
-    // Создаем новую команду противника с учетом текущего уровня
     this.createEnemyTeamForLevel();
-
-    // Сбрасываем выделение и начинаем новый раунд
     this.deselectCharacter();
     this.gameState.turn = 'player';
 
-    console.log(`Уровень ${this.gameState.level} начат!`);
+    console.log(`Уровень ${this.gameState.level} начат! Текущий счет: ${this.gameState.score}`);
   }
 
-  /**
-   * Повышает уровень всех выживших персонажей игрока
-   */
   levelUpAllSurvivors() {
     this.playerPositions.forEach((pos) => {
-      // Сохраняем старый уровень для логирования
       const oldLevel = pos.character.level;
-
-      // Повышаем уровень персонажа используя его собственный метод levelUp
       pos.character.levelUp();
-
       console.log(
         `Персонаж ${pos.character.type} повышен с уровня ${oldLevel} до ${pos.character.level}. ` +
         `Атака: ${pos.character.attack}, Защита: ${pos.character.defence}, Здоровье: ${pos.character.health}`
@@ -384,9 +375,6 @@ export default class GameController {
     });
   }
 
-  /**
-   * Обновляет тему в зависимости от уровня
-   */
   updateTheme() {
     const levelThemes = {
       1: gameThemes.prairie,
@@ -399,15 +387,9 @@ export default class GameController {
     this.gamePlay.drawUi(theme);
   }
 
-  /**
-   * Создает новую команду противника для текущего уровня
-   */
   createEnemyTeamForLevel() {
     const enemyTypes = [Vampire, Undead, Daemon];
-
-    // Количество врагов увеличивается с уровнем
     const enemyCount = Math.min(3 + this.gameState.level, 6);
-
     this.enemyTeam = generateTeam(enemyTypes, this.gameState.level, enemyCount);
     this.positionTeams();
     this.redraw();
@@ -425,7 +407,6 @@ export default class GameController {
       this.updateCursorForEmptyCell(index);
     }
 
-    // Подсвечиваем область атаки/перемещения
     this.highlightAreas(index);
   }
 
@@ -454,14 +435,12 @@ export default class GameController {
   }
 
   highlightAreas(index) {
-    // Снимаем подсветку со всех клеток
     for (let i = 0; i < 64; i++) {
       if (i !== this.selectedCell && i !== index) {
         this.gamePlay.deselectCell(i);
       }
     }
 
-    // Подсвечиваем область перемещения (только если есть выделенный персонаж)
     if (this.selectedCharacter) {
       this.moveArea.forEach((cellIndex) => {
         if (cellIndex !== this.selectedCell && cellIndex !== index) {
@@ -481,13 +460,12 @@ export default class GameController {
     this.gamePlay.setCursor(cursors.auto);
   }
 
-    computerTurn() {
-    // Используем улучшенный ИИ
+  computerTurn() {
     setTimeout(() => {
       const action = AdvancedAI.performComputerTurn(
         this.enemyPositions,
         this.playerPositions,
-        8, // boardSize
+        8,
       );
 
       if (action) {
@@ -497,28 +475,179 @@ export default class GameController {
           this.performComputerMove(action.fromPosition, action.toPosition);
         }
       } else {
-        // Если не смогли найти действие, передаем ход
         this.gameState.turn = 'player';
         console.log('Компьютер пропускает ход');
       }
     }, 1000);
   }
 
+  performComputerMove(fromIndex, toIndex) {
+    const charInfo = this.getCharacterAtPosition(fromIndex);
+    if (!charInfo) return;
+
+    charInfo.positionedChar.position = toIndex;
+    this.redraw();
+    console.log(`Компьютер переместил ${charInfo.character.type} с ${fromIndex} на ${toIndex}`);
+    this.gameState.turn = 'player';
+  }
+
+  performComputerAttack(fromIndex, toIndex) {
+    const attackerInfo = this.getCharacterAtPosition(fromIndex);
+    const targetInfo = this.getCharacterAtPosition(toIndex);
+
+    if (!attackerInfo || !targetInfo) return;
+
+    const attacker = attackerInfo.character;
+    const target = targetInfo.character;
+
+    const damage = calculateDamage(attacker, target);
+    target.health -= damage;
+
+    console.log(`Компьютер: ${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
+
+    if (isCharacterDead(target)) {
+      target.health = 0;
+      this.playerPositions = this.playerPositions.filter((pos) => pos.position !== toIndex);
+      console.log(`${target.type} погиб от атаки компьютера!`);
+    }
+
+    this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
+      this.redraw();
+
+      if (this.checkGameEnd()) {
+        return;
+      }
+
+      this.gameState.turn = 'player';
+    });
+  }
+
+  /**
+   * Начинает новую игру
+   */
+  newGame() {
+    // Сохраняем максимальный счет перед сбросом
+    const maxScore = this.gameState?.maxScore || 0;
+
+    // Создаем новое состояние
+    this.gameState = new GameState();
+    this.gameState.maxScore = maxScore;
+
+    // Сбрасываем все поля
+    this.isGameBlocked = false;
+    this.selectedCell = null;
+    this.selectedCharacter = null;
+    this.attackArea = [];
+    this.moveArea = [];
+
+    // Создаем новые команды
+    this.createTeams();
+    this.positionTeams();
+
+    // Отрисовываем поле с темой prairie
+    this.gamePlay.drawUi(gameThemes.prairie);
+    this.redraw();
+
+    console.log(`Новая игра начата! Максимальный счет: ${maxScore}`);
+  }
+
+  /**
+   * Сохраняет игру
+   */
+  saveGame() {
+    try {
+      // Обновляем состояние перед сохранением
+      this.updateGameState();
+      this.stateService.save(this.gameState.toJSON());
+      this.gamePlay.showMessage('Игра сохранена!');
+    } catch (e) {
+      this.gamePlay.showError('Ошибка сохранения игры!');
+    }
+  }
+
+  /**
+   * Загружает игру
+   */
+  loadGame() {
+    try {
+      const savedState = this.stateService.load();
+      if (savedState) {
+        this.gameState = GameState.from(savedState);
+        this.restoreGameState();
+        this.gamePlay.showMessage('Игра загружена!');
+      }
+    } catch (e) {
+      this.gamePlay.showError('Ошибка загрузки игры!');
+    }
+  }
+
+  /**
+   * Восстанавливает состояние игры из сохранения
+   */
+  restoreGameState() {
+    console.log('Восстановление состояния игры...');
+    // TODO: Реализовать восстановление персонажей из сохраненных данных
+    // Эта функция будет реализована в задаче 11
+  }
+
+  /**
+   * Обновляет состояние игры перед сохранением
+   */
+  updateGameState() {
+    this.gameState.level = this.gameState.level;
+    this.gameState.turn = this.gameState.turn;
+    this.gameState.score = this.gameState.score;
+    this.gameState.maxScore = this.gameState.maxScore;
+    this.gameState.playerPositions = [...this.playerPositions];
+    this.gameState.enemyPositions = [...this.enemyPositions];
+
+    const levelThemes = {
+      1: gameThemes.prairie,
+      2: gameThemes.desert,
+      3: gameThemes.arctic,
+      4: gameThemes.mountain,
+    };
+    this.gameState.currentTheme = levelThemes[this.gameState.level] || gameThemes.prairie;
+  }
+
+  /**
+   * Обработчик клика на кнопку New Game
+   */
+  onNewGameClick() {
+    if (confirm('Начать новую игру? Текущий прогресс будет потерян.')) {
+      this.newGame();
+    }
+  }
+
+  /**
+   * Обработчик клика на кнопку Save Game
+   */
+  onSaveGameClick() {
+    this.saveGame();
+  }
+
+  /**
+   * Обработчик клика на кнопку Load Game
+   */
+  onLoadGameClick() {
+    if (confirm('Загрузить сохраненную игру? Текущий прогресс будет потерян.')) {
+      this.loadGame();
+    }
+  }
+
   getPossibleMoves(positionedChar) {
     const possibleMoves = [];
     const { position, character } = positionedChar;
 
-    // Определяем максимальное расстояние перемещения
     let maxMove;
     if (character.type === 'swordsman' || character.type === 'undead') {
       maxMove = 4;
     } else if (character.type === 'bowman' || character.type === 'vampire') {
       maxMove = 2;
     } else {
-      maxMove = 1; // magician или daemon
+      maxMove = 1;
     }
 
-    // Проверяем все клетки в пределах радиуса
     for (let row = -maxMove; row <= maxMove; row++) {
       for (let col = -maxMove; col <= maxMove; col++) {
         const newRow = Math.floor(position / 8) + row;
@@ -577,48 +706,5 @@ export default class GameController {
     });
 
     return bestMove;
-  }
-
-  performComputerMove(fromIndex, toIndex) {
-    const charInfo = this.getCharacterAtPosition(fromIndex);
-    if (!charInfo) return;
-
-    charInfo.positionedChar.position = toIndex;
-    this.redraw();
-
-    console.log(`Компьютер переместил ${charInfo.character.type} с ${fromIndex} на ${toIndex}`);
-
-    this.gameState.turn = 'player';
-  }
-
-  performComputerAttack(fromIndex, toIndex) {
-    const attackerInfo = this.getCharacterAtPosition(fromIndex);
-    const targetInfo = this.getCharacterAtPosition(toIndex);
-
-    if (!attackerInfo || !targetInfo) return;
-
-    const attacker = attackerInfo.character;
-    const target = targetInfo.character;
-
-    const damage = calculateDamage(attacker, target);
-    target.health -= damage;
-
-    console.log(`Компьютер: ${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
-
-    if (isCharacterDead(target)) {
-      target.health = 0;
-      this.playerPositions = this.playerPositions.filter((pos) => pos.position !== toIndex);
-      console.log(`${target.type} погиб от атаки компьютера!`);
-    }
-
-    this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
-      this.redraw();
-
-      if (this.checkGameEnd()) {
-        return;
-      }
-
-      this.gameState.turn = 'player';
-    });
   }
 }
