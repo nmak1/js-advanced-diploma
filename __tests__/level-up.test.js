@@ -1,4 +1,3 @@
-import Character from '../src/js/Character';
 import Bowman from '../src/js/characters/Bowman';
 import Swordsman from '../src/js/characters/Swordsman';
 import Magician from '../src/js/characters/Magician';
@@ -46,7 +45,6 @@ describe('Character level up', () => {
 
     test('should improve attack according to formula', () => {
       const character = new Bowman(1);
-      const oldAttack = character.attack; // 25
 
       character.levelUp();
 
@@ -70,7 +68,6 @@ describe('Character level up', () => {
 
     test('should improve defence according to formula', () => {
       const character = new Bowman(1);
-      const oldDefence = character.defence; // 25
 
       character.levelUp();
 
@@ -143,20 +140,17 @@ describe('Character level up', () => {
     test('Bowman should level up correctly', () => {
       const character = new Bowman(1);
       const oldLevel = character.level;
-      const oldAttack = character.attack;
-      const oldDefence = character.defence;
 
       character.levelUp();
 
       expect(character.level).toBe(oldLevel + 1);
-      expect(character.attack).toBeGreaterThan(oldAttack);
-      expect(character.defence).toBeGreaterThan(oldDefence);
+      expect(character.attack).toBe(40);
+      expect(character.defence).toBe(40);
       expect(character.health).toBe(82);
     });
 
     test('Swordsman should level up correctly', () => {
       const character = new Swordsman(1);
-      const oldAttack = character.attack; // 40
 
       character.levelUp();
 

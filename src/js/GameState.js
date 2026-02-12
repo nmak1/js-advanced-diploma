@@ -12,44 +12,36 @@ export default class GameState {
     this.currentTheme = 'prairie';
   }
 
-  /**
-   * Создает состояние из сохраненного объекта
-   */
   static from(object) {
     if (!object) return null;
-    
+
     const state = new GameState();
     state.level = object.level || 1;
     state.turn = object.turn || 'player';
     state.score = object.score || 0;
     state.maxScore = object.maxScore || 0;
     state.currentTheme = object.currentTheme || 'prairie';
-    
-    // Восстанавливаем позиции игроков
-    state.playerPositions = (object.playerPositions || []).map(posData => {
+
+    state.playerPositions = (object.playerPositions || []).map((posData) => {
       const character = CharacterFactory.fromJSON(posData.character);
       return new PositionedCharacter(character, posData.position);
     });
-    
-    // Восстанавливаем позиции врагов
-    state.enemyPositions = (object.enemyPositions || []).map(posData => {
+
+    state.enemyPositions = (object.enemyPositions || []).map((posData) => {
       const character = CharacterFactory.fromJSON(posData.character);
       return new PositionedCharacter(character, posData.position);
     });
-    
+
     return state;
   }
 
-  /**
-   * Сериализует состояние для сохранения
-   */
   toJSON() {
     return {
       level: this.level,
       turn: this.turn,
       score: this.score,
       maxScore: this.maxScore,
-      playerPositions: this.playerPositions.map(pos => ({
+      playerPositions: this.playerPositions.map((pos) => ({
         character: {
           level: pos.character.level,
           attack: pos.character.attack,
@@ -59,7 +51,7 @@ export default class GameState {
         },
         position: pos.position,
       })),
-      enemyPositions: this.enemyPositions.map(pos => ({
+      enemyPositions: this.enemyPositions.map((pos) => ({
         character: {
           level: pos.character.level,
           attack: pos.character.attack,

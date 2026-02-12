@@ -1,5 +1,5 @@
-import { AdvancedAI } from './ai';
-import gameThemes from './themes';
+import AdvancedAI from './ai';
+import { getThemeByLevel } from './themes';
 import Bowman from './characters/Bowman';
 import Swordsman from './characters/Swordsman';
 import Magician from './characters/Magician';
@@ -8,7 +8,7 @@ import Undead from './characters/Undead';
 import Daemon from './characters/Daemon';
 import { generateTeam } from './generators';
 import PositionedCharacter from './PositionedCharacter';
-import GameState from './GameState'; // Добавляем импорт GameState
+import GameState from './GameState';
 import {
   formatCharacterInfo,
   canMove,
@@ -36,14 +36,11 @@ export default class GameController {
   }
 
   init() {
-    // Пытаемся загрузить сохранение
     this.loadGame();
 
     if (this.playerPositions.length === 0) {
-      // Если нет сохранения или оно не загрузилось, создаем новую игру
       this.newGame();
     } else {
-      // Если загрузка прошла успешно, обновляем тему и перерисовываем
       this.gamePlay.drawUi(this.gameState.currentTheme);
       this.redraw();
     }
@@ -239,7 +236,6 @@ export default class GameController {
     this.redraw();
     this.updateScore();
     this.gameState.turn = 'computer';
-    console.log(`Персонаж ${charInfo.character.type} перемещен с ${fromIndex} на ${toIndex}`);
     this.computerTurn();
   }
 
@@ -253,19 +249,21 @@ export default class GameController {
     const target = targetInfo.character;
 
     const damage = calculateDamage(attacker, target);
-    console.log(`${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
-
     target.health -= damage;
 
     if (isCharacterDead(target)) {
       target.health = 0;
-      console.log(`${target.type} погиб!`);
       this.gameState.score += target.level * 10;
+      this.gamePlay.showMessage(`${target.type} повержен! +${target.level * 10} очков`);
 
       if (targetInfo.type === 'enemy') {
-        this.enemyPositions = this.enemyPositions.filter((pos) => pos.position !== toIndex);
+        this.enemyPositions = this.enemyPositions.filter(
+          (pos) => pos.position !== toIndex,
+        );
       } else {
-        this.playerPositions = this.playerPositions.filter((pos) => pos.position !== toIndex);
+        this.playerPositions = this.playerPositions.filter(
+          (pos) => pos.position !== toIndex,
+        );
       }
     }
 
@@ -290,7 +288,7 @@ export default class GameController {
   updateMaxScore() {
     if (this.gameState.score > this.gameState.maxScore) {
       this.gameState.maxScore = this.gameState.score;
-      console.log(`Новый рекорд! Максимальный счет: ${this.gameState.maxScore}`);
+      this.gamePlay.showMessage(`НОВЫЙ РЕКОРД! Максимальный счет: ${this.gameState.maxScore}`);
     }
   }
 
@@ -317,82 +315,71 @@ export default class GameController {
   blockGame() {
     this.isGameBlocked = true;
 
-    // Очищаем все слушатели
     this.gamePlay.cellClickListeners = [];
     this.gamePlay.cellEnterListeners = [];
     this.gamePlay.cellLeaveListeners = [];
 
-    // Добавляем только слушатели для кнопок
     this.gamePlay.addNewGameListener(this.onNewGameClick.bind(this));
     this.gamePlay.addSaveGameListener(this.onSaveGameClick.bind(this));
     this.gamePlay.addLoadGameListener(this.onLoadGameClick.bind(this));
 
     this.gamePlay.setCursor('default');
-    console.log('Игра заблокирована');
   }
 
   gameOver(reason) {
     this.isGameBlocked = true;
     this.blockGame();
-
     this.updateMaxScore();
 
     let message = '';
     if (reason === 'Поражение') {
-      message = `Игра окончена! Вы проиграли! Очки: ${this.gameState.score}`;
+      message = `Игра окончена! Вы проиграли на уровне ${this.gameState.level}!`;
     } else {
-      message = `Поздравляем! Вы прошли все уровни! Финальный счет: ${this.gameState.score}`;
+      message = 'ПОБЕДА! Вы прошли игру!';
     }
 
+    message += `\nСчет: ${this.gameState.score}`;
     message += `\nМаксимальный счет: ${this.gameState.maxScore}`;
+    message += `\nУровень: ${this.gameState.level}`;
+    message += `\nУбито врагов: ${Math.floor(this.gameState.score / 10)}`;
 
     this.gamePlay.showMessage(message);
-    console.log(`Game Over: ${reason}, Score: ${this.gameState.score}, Max Score: ${this.gameState.maxScore}`);
   }
 
   levelUp() {
-    if (this.gameState.level >= 4) {
-      this.gameOver('Победа');
-      return;
-    }
-
     this.gameState.level += 1;
+    const levelBonus = this.gameState.level * 50;
+    this.gameState.score += levelBonus;
+
+    this.gamePlay.showMessage(`УРОВЕНЬ ${this.gameState.level}! Бонус: +${levelBonus} очков`);
+
     this.levelUpAllSurvivors();
     this.updateTheme();
     this.createEnemyTeamForLevel();
     this.deselectCharacter();
     this.gameState.turn = 'player';
-
-    console.log(`Уровень ${this.gameState.level} начат! Текущий счет: ${this.gameState.score}`);
   }
 
   levelUpAllSurvivors() {
     this.playerPositions.forEach((pos) => {
-      const oldLevel = pos.character.level;
       pos.character.levelUp();
-      console.log(
-        `Персонаж ${pos.character.type} повышен с уровня ${oldLevel} до ${pos.character.level}. ` +
-        `Атака: ${pos.character.attack}, Защита: ${pos.character.defence}, Здоровье: ${pos.character.health}`
-      );
     });
   }
 
   updateTheme() {
-    const levelThemes = {
-      1: gameThemes.prairie,
-      2: gameThemes.desert,
-      3: gameThemes.arctic,
-      4: gameThemes.mountain,
-    };
-
-    const theme = levelThemes[this.gameState.level] || gameThemes.prairie;
+    const theme = getThemeByLevel(this.gameState.level);
     this.gamePlay.drawUi(theme);
+    this.gameState.currentTheme = theme;
   }
 
   createEnemyTeamForLevel() {
     const enemyTypes = [Vampire, Undead, Daemon];
-    const enemyCount = Math.min(3 + this.gameState.level, 6);
-    this.enemyTeam = generateTeam(enemyTypes, this.gameState.level, enemyCount);
+    const baseCount = 3;
+    const additionalCount = Math.floor(this.gameState.level / 2);
+    const enemyCount = Math.min(baseCount + additionalCount, 8);
+    const enemyMaxLevel = Math.min(this.gameState.level, 10);
+
+    this.enemyTeam = generateTeam(enemyTypes, enemyMaxLevel, enemyCount);
     this.positionTeams();
     this.redraw();
   }
@@ -449,6 +436,14 @@ export default class GameController {
           this.gamePlay.selectCell(cellIndex, 'green');
         }
       });
+
+      this.attackArea.forEach((cellIndex) => {
+        if (cellIndex !== this.selectedCell && cellIndex !== index) {
+          if (!this.moveArea.includes(cellIndex)) {
+            this.gamePlay.selectCell(cellIndex, 'red');
+          }
+        }
+      });
     }
   }
 
@@ -478,7 +473,7 @@ export default class GameController {
         }
       } else {
         this.gameState.turn = 'player';
-        console.log('Компьютер пропускает ход');
+        this.gamePlay.showMessage('Компьютер пропускает ход');
       }
     }, 1000);
   }
@@ -489,7 +484,6 @@ export default class GameController {
 
     charInfo.positionedChar.position = toIndex;
     this.redraw();
-    console.log(`Компьютер переместил ${charInfo.character.type} с ${fromIndex} на ${toIndex}`);
     this.gameState.turn = 'player';
   }
 
@@ -505,12 +499,12 @@ export default class GameController {
     const damage = calculateDamage(attacker, target);
     target.health -= damage;
 
-    console.log(`Компьютер: ${attacker.type} атакует ${target.type}, урон: ${damage.toFixed(1)}`);
-
     if (isCharacterDead(target)) {
       target.health = 0;
-      this.playerPositions = this.playerPositions.filter((pos) => pos.position !== toIndex);
-      console.log(`${target.type} погиб от атаки компьютера!`);
+      this.playerPositions = this.playerPositions.filter(
+        (pos) => pos.position !== toIndex,
+      );
+      this.gamePlay.showMessage(`Ваш ${target.type} погиб!`);
     }
 
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
@@ -524,41 +518,29 @@ export default class GameController {
     });
   }
 
-  /**
-   * Начинает новую игру
-   */
   newGame() {
-    // Сохраняем максимальный счет перед сбросом
     const maxScore = this.gameState?.maxScore || 0;
-
-    // Создаем новое состояние
     this.gameState = new GameState();
     this.gameState.maxScore = maxScore;
 
-    // Сбрасываем все поля
     this.isGameBlocked = false;
     this.selectedCell = null;
     this.selectedCharacter = null;
     this.attackArea = [];
     this.moveArea = [];
 
-    // Создаем новые команды
     this.createTeams();
     this.positionTeams();
 
-    // Отрисовываем поле с темой prairie
-    this.gamePlay.drawUi(gameThemes.prairie);
+    const theme = getThemeByLevel(1);
+    this.gamePlay.drawUi(theme);
     this.redraw();
 
-    console.log(`Новая игра начата! Максимальный счет: ${maxScore}`);
+    this.gamePlay.showMessage(`Новая игра начата! Максимальный счет: ${maxScore}`);
   }
 
-  /**
-   * Сохраняет игру
-   */
   saveGame() {
     try {
-      // Обновляем состояние перед сохранением
       this.updateGameState();
       this.stateService.save(this.gameState.toJSON());
       this.gamePlay.showMessage('Игра сохранена!');
@@ -567,9 +549,6 @@ export default class GameController {
     }
   }
 
-  /**
-   * Загружает игру
-   */
   loadGame() {
     try {
       const savedState = this.stateService.load();
@@ -583,73 +562,43 @@ export default class GameController {
     }
   }
 
-  /**
-   * Восстанавливает состояние игры из сохранения
-   */
   restoreGameState() {
-    console.log('Восстановление состояния игры...');
-
-    // Восстанавливаем позиции
     this.playerPositions = this.gameState.playerPositions;
     this.enemyPositions = this.gameState.enemyPositions;
 
-    // Восстанавливаем тему
     this.gamePlay.drawUi(this.gameState.currentTheme);
-
-    // Перерисовываем поле
     this.redraw();
 
-    // Сбрасываем выделение
     this.deselectCharacter();
     this.isGameBlocked = false;
 
-    // Восстанавливаем команды для совместимости
-    this.playerTeam = { characters: this.playerPositions.map(p => p.character) };
-    this.enemyTeam = { characters: this.enemyPositions.map(p => p.character) };
-
-    console.log(`Игра восстановлена: Уровень ${this.gameState.level}, Ход: ${this.gameState.turn}, Счет: ${this.gameState.score}`);
+    this.playerTeam = {
+      characters: this.playerPositions.map((p) => p.character),
+    };
+    this.enemyTeam = {
+      characters: this.enemyPositions.map((p) => p.character),
+    };
   }
 
-  /**
-   * Обновляет состояние игры перед сохранением
-   */
   updateGameState() {
-    this.gameState.level = this.gameState.level;
-    this.gameState.turn = this.gameState.turn;
-    this.gameState.score = this.gameState.score;
-    this.gameState.maxScore = this.gameState.maxScore;
     this.gameState.playerPositions = [...this.playerPositions];
     this.gameState.enemyPositions = [...this.enemyPositions];
-
-    const levelThemes = {
-      1: gameThemes.prairie,
-      2: gameThemes.desert,
-      3: gameThemes.arctic,
-      4: gameThemes.mountain,
-    };
-    this.gameState.currentTheme = levelThemes[this.gameState.level] || gameThemes.prairie;
+    this.gameState.currentTheme = getThemeByLevel(this.gameState.level);
   }
 
-  /**
-   * Обработчик клика на кнопку New Game
-   */
   onNewGameClick() {
+    // eslint-disable-next-line no-restricted-globals
     if (confirm('Начать новую игру? Текущий прогресс будет потерян.')) {
       this.newGame();
     }
   }
 
-  /**
-   * Обработчик клика на кнопку Save Game
-   */
   onSaveGameClick() {
     this.saveGame();
   }
 
-  /**
-   * Обработчик клика на кнопку Load Game
-   */
   onLoadGameClick() {
+    // eslint-disable-next-line no-restricted-globals
     if (confirm('Загрузить сохраненную игру? Текущий прогресс будет потерян.')) {
       this.loadGame();
     }

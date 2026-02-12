@@ -1,11 +1,17 @@
-import { AdvancedAI } from '../src/js/ai';
+import AdvancedAI from '../src/js/ai';
 
 describe('Advanced AI Tests', () => {
   describe('calculateAttackScore', () => {
     test('should give higher score to low health targets', () => {
-      const attacker = { type: 'swordsman', attack: 40, defence: 10, health: 50 };
-      const weakTarget = { type: 'vampire', health: 10, defence: 25, level: 1 };
-      const strongTarget = { type: 'vampire', health: 100, defence: 25, level: 1 };
+      const attacker = {
+        type: 'swordsman', attack: 40, defence: 10, health: 50,
+      };
+      const weakTarget = {
+        type: 'vampire', health: 10, defence: 25, level: 1,
+      };
+      const strongTarget = {
+        type: 'vampire', health: 100, defence: 25, level: 1,
+      };
 
       const weakScore = AdvancedAI.calculateAttackScore(attacker, weakTarget);
       const strongScore = AdvancedAI.calculateAttackScore(attacker, strongTarget);
@@ -14,8 +20,12 @@ describe('Advanced AI Tests', () => {
     });
 
     test('should give huge bonus for kill shot', () => {
-      const attacker = { type: 'swordsman', attack: 100, defence: 10, health: 50 };
-      const target = { type: 'vampire', health: 50, defence: 10, level: 1 };
+      const attacker = {
+        type: 'swordsman', attack: 100, defence: 10, health: 50,
+      };
+      const target = {
+        type: 'vampire', health: 50, defence: 10, level: 1,
+      };
 
       const score = AdvancedAI.calculateAttackScore(attacker, target);
 
@@ -24,9 +34,15 @@ describe('Advanced AI Tests', () => {
 
     test('should consider type advantages', () => {
       // Мечник силен против Нежити
-      const attacker = { type: 'swordsman', attack: 40, defence: 10, health: 50 };
-      const advantagedTarget = { type: 'undead', health: 50, defence: 10, level: 1 };
-      const neutralTarget = { type: 'vampire', health: 50, defence: 10, level: 1 };
+      const attacker = {
+        type: 'swordsman', attack: 40, defence: 10, health: 50,
+      };
+      const advantagedTarget = {
+        type: 'undead', health: 50, defence: 10, level: 1,
+      };
+      const neutralTarget = {
+        type: 'vampire', health: 50, defence: 10, level: 1,
+      };
 
       const advantagedScore = AdvancedAI.calculateAttackScore(attacker, advantagedTarget);
       const neutralScore = AdvancedAI.calculateAttackScore(attacker, neutralTarget);
@@ -76,18 +92,24 @@ describe('Advanced AI Tests', () => {
   describe('findBestAttackAction', () => {
     const playerPositions = [
       {
-        character: { type: 'vampire', health: 30, defence: 25, level: 1 },
+        character: {
+          type: 'vampire', health: 30, defence: 25, level: 1,
+        },
         position: 10,
       },
       {
-        character: { type: 'undead', health: 80, defence: 10, level: 2 },
+        character: {
+          type: 'undead', health: 80, defence: 10, level: 2,
+        },
         position: 11,
       },
     ];
 
     test('should select target with highest score', () => {
       const enemyPos = {
-        character: { type: 'swordsman', attack: 40, defence: 10, health: 50 },
+        character: {
+          type: 'swordsman', attack: 40, defence: 10, health: 50,
+        },
         position: 9,
       };
 

@@ -12,6 +12,7 @@ export default class GamePlay {
     this.newGameListeners = [];
     this.saveGameListeners = [];
     this.loadGameListeners = [];
+    this.messageContainer = null;
   }
 
   bindToDOM(container) {
@@ -182,12 +183,25 @@ export default class GamePlay {
     this.loadGameListeners.forEach((o) => o.call(null));
   }
 
-  static showError(message) {
-    alert(message);
+  /**
+   * Показывает сообщение об ошибке
+   * @param {string} message - текст сообщения
+   */
+  showError(message) {
+    if (process.env.NODE_ENV !== 'test') {
+      alert(message);
+    }
   }
 
-  static showMessage(message) {
-    alert(message);
+  /**
+   * Показывает сообщение
+   * @param {string} message - текст сообщения
+   * @param {string} _type - тип сообщения (не используется, оставлен для совместимости)
+   */
+  showMessage(message, _type = 'info') {
+    if (process.env.NODE_ENV !== 'test') {
+      alert(message);
+    }
   }
 
   selectCell(index, color = 'yellow') {

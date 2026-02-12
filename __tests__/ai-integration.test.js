@@ -1,4 +1,4 @@
-import { AdvancedAI } from '../src/js/ai';
+import AdvancedAI from '../src/js/ai';
 import Bowman from '../src/js/characters/Bowman';
 import Swordsman from '../src/js/characters/Swordsman';
 import Magician from '../src/js/characters/Magician';

@@ -159,7 +159,7 @@ describe('GameController New Game and Game Over', () => {
       maxScore: 100,
       playerPositions: [],
       enemyPositions: [],
-      currentTheme: 'prairie'
+      currentTheme: 'prairie',
     };
     stateService.load.mockReturnValue(savedState);
 

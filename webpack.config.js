@@ -44,11 +44,12 @@ module.exports = {
     open: true,
     hot: true,
     historyApiFallback: true,
-    // ⚠️ ВАЖНО: Отключаем CSP для devServer
     headers: {
-      "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:9000 ws://localhost:9000; connect-src 'self' ws://localhost:9000 http://localhost:9000;",
+      'Content-Security-Policy':
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: "
+        + 'http://localhost:9000 ws://localhost:9000; '
+        + "connect-src 'self' ws://localhost:9000 http://localhost:9000;",
     },
-    // Разрешаем все хосты для dev-сервера
     allowedHosts: 'all',
     client: {
       webSocketURL: 'auto://localhost:9000/ws',

@@ -54,7 +54,7 @@ describe('GameStateService', () => {
     expect(storage.setItem).toHaveBeenCalledTimes(1);
     expect(storage.setItem).toHaveBeenCalledWith(
       'state',
-      expect.any(String)
+      expect.any(String),
     );
 
     // Проверяем, что сохраняемые данные валидны
