@@ -15,7 +15,6 @@ import {
   canAttack,
   calculateDamage,
   isCharacterDead,
-  getAttackArea,
 } from './utils';
 import cursors from './cursors';
 
@@ -25,20 +24,74 @@ export default class GameController {
     this.stateService = stateService;
     this.playerTeam = null;
     this.enemyTeam = null;
-    this.playerPositions = [];
-    this.enemyPositions = [];
     this.selectedCell = null;
     this.selectedCharacter = null;
     this.attackArea = [];
     this.moveArea = [];
     this.gameState = new GameState();
-    this.isGameBlocked = false;
+  }
+
+  // Прокси-свойства для обратной совместимости с тестами
+  get playerPositions() {
+    return this.gameState.playerPositions;
+  }
+
+  set playerPositions(value) {
+    this.gameState.setPlayerPositions(value);
+  }
+
+  get enemyPositions() {
+    return this.gameState.enemyPositions;
+  }
+
+  set enemyPositions(value) {
+    this.gameState.setEnemyPositions(value);
+  }
+
+  get isGameBlocked() {
+    return this.gameState.isGameBlocked;
+  }
+
+  set isGameBlocked(value) {
+    this.gameState.setGameBlocked(value);
+  }
+
+  get score() {
+    return this.gameState.score;
+  }
+
+  set score(value) {
+    this.gameState.score = value;
+  }
+
+  get maxScore() {
+    return this.gameState.maxScore;
+  }
+
+  set maxScore(value) {
+    this.gameState.maxScore = value;
+  }
+
+  get level() {
+    return this.gameState.level;
+  }
+
+  set level(value) {
+    this.gameState.level = value;
+  }
+
+  get turn() {
+    return this.gameState.turn;
+  }
+
+  set turn(value) {
+    this.gameState.turn = value;
   }
 
   init() {
     this.loadGame();
 
-    if (this.playerPositions.length === 0) {
+    if (this.gameState.playerPositions.length === 0) {
       this.newGame();
     } else {
       this.gamePlay.drawUi(this.gameState.currentTheme);
@@ -62,60 +115,67 @@ export default class GameController {
   }
 
   positionTeams() {
-    this.playerPositions = [];
-    this.enemyPositions = [];
-
     const playerColumns = [0, 1];
     const enemyColumns = [6, 7];
+    const playerPositions = [];
+    const enemyPositions = [];
 
     let playerIndex = 0;
-    this.playerTeam.characters.forEach((character) => {
+    this.playerTeam.toArray().forEach((character) => {
       const row = Math.floor(playerIndex / 2);
       const col = playerColumns[playerIndex % 2];
       const position = row * 8 + col;
-      this.playerPositions.push(new PositionedCharacter(character, position));
+      playerPositions.push(new PositionedCharacter(character, position));
       playerIndex++;
     });
 
     let enemyIndex = 0;
-    this.enemyTeam.characters.forEach((character) => {
+    this.enemyTeam.toArray().forEach((character) => {
       const row = Math.floor(enemyIndex / 2);
       const col = enemyColumns[enemyIndex % 2];
       const position = row * 8 + col;
-      this.enemyPositions.push(new PositionedCharacter(character, position));
+      enemyPositions.push(new PositionedCharacter(character, position));
       enemyIndex++;
     });
+
+    this.gameState.setPlayerPositions(playerPositions);
+    this.gameState.setEnemyPositions(enemyPositions);
   }
 
   redraw() {
-    const allPositions = [...this.playerPositions, ...this.enemyPositions];
+    const allPositions = [
+      ...this.gameState.playerPositions,
+      ...this.gameState.enemyPositions,
+    ];
     this.gamePlay.redrawPositions(allPositions);
   }
 
   getCharacterAtPosition(index) {
-    const playerChar = this.playerPositions.find((pos) => pos.position === index);
-    if (playerChar) {
-      return {
-        character: playerChar.character,
-        type: 'player',
-        positionedChar: playerChar,
-      };
-    }
-
-    const enemyChar = this.enemyPositions.find((pos) => pos.position === index);
-    if (enemyChar) {
-      return {
-        character: enemyChar.character,
-        type: 'enemy',
-        positionedChar: enemyChar,
-      };
-    }
-
-    return null;
+    return this.gameState.getCharacterAt(index);
   }
 
   isCellOccupied(index) {
-    return this.getCharacterAtPosition(index) !== null;
+    return this.gameState.isCellOccupied(index);
+  }
+
+  canMove(toIndex) {
+    if (!this.selectedCharacter || this.isCellOccupied(toIndex)) {
+      return false;
+    }
+    return canMove(this.selectedCell, toIndex, this.selectedCharacter.type);
+  }
+
+  canAttack(targetIndex) {
+    if (!this.selectedCharacter || !this.isCellOccupied(targetIndex)) {
+      return false;
+    }
+
+    const targetChar = this.getCharacterAtPosition(targetIndex);
+    if (!targetChar || targetChar.type === 'player') {
+      return false;
+    }
+
+    return canAttack(this.selectedCell, targetIndex, this.selectedCharacter.type);
   }
 
   updateSelectedAreas() {
@@ -125,12 +185,33 @@ export default class GameController {
       return;
     }
 
-    this.attackArea = getAttackArea(
-      this.selectedCell,
-      this.selectedCharacter.type,
-      8,
-    );
+    // Обновляем область атаки
+    this.attackArea = [];
+    let maxAttack;
+    if (this.selectedCharacter.type === 'swordsman' || this.selectedCharacter.type === 'undead') {
+      maxAttack = 1;
+    } else if (this.selectedCharacter.type === 'bowman' || this.selectedCharacter.type === 'vampire') {
+      maxAttack = 2;
+    } else {
+      maxAttack = 4;
+    }
 
+    const fromRow = Math.floor(this.selectedCell / 8);
+    const fromCol = this.selectedCell % 8;
+
+    for (let row = fromRow - maxAttack; row <= fromRow + maxAttack; row++) {
+      for (let col = fromCol - maxAttack; col <= fromCol + maxAttack; col++) {
+        if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+          const index = row * 8 + col;
+          const distance = Math.max(Math.abs(row - fromRow), Math.abs(col - fromCol));
+          if (distance <= maxAttack && index !== this.selectedCell) {
+            this.attackArea.push(index);
+          }
+        }
+      }
+    }
+
+    // Обновляем область перемещения
     this.moveArea = [];
     for (let i = 0; i < 64; i++) {
       if (this.canMove(i)) {
@@ -140,7 +221,7 @@ export default class GameController {
   }
 
   onCellClick(index) {
-    if (this.isGameBlocked) {
+    if (this.gameState.isGameBlocked) {
       this.gamePlay.showError('Игра завершена. Начните новую игру.');
       return;
     }
@@ -207,34 +288,14 @@ export default class GameController {
     this.moveArea = [];
   }
 
-  canMove(toIndex) {
-    if (!this.selectedCharacter || this.isCellOccupied(toIndex)) {
-      return false;
-    }
-    return canMove(this.selectedCell, toIndex, this.selectedCharacter.type);
-  }
-
-  canAttack(targetIndex) {
-    if (!this.selectedCharacter || !this.isCellOccupied(targetIndex)) {
-      return false;
-    }
-
-    const targetChar = this.getCharacterAtPosition(targetIndex);
-    if (!targetChar || targetChar.type === 'player') {
-      return false;
-    }
-
-    return canAttack(this.selectedCell, targetIndex, this.selectedCharacter.type);
-  }
-
   performMove(fromIndex, toIndex) {
     const charInfo = this.getCharacterAtPosition(fromIndex);
     if (!charInfo) return;
 
-    charInfo.positionedChar.position = toIndex;
+    this.gameState.moveCharacter(fromIndex, toIndex);
     this.deselectCharacter();
     this.redraw();
-    this.updateScore();
+    this.gameState.addScore(1);
     this.gameState.turn = 'computer';
     this.computerTurn();
   }
@@ -253,24 +314,15 @@ export default class GameController {
 
     if (isCharacterDead(target)) {
       target.health = 0;
-      this.gameState.score += target.level * 10;
+      this.gameState.addScore(target.level * 10);
       this.gamePlay.showMessage(`${target.type} повержен! +${target.level * 10} очков`);
 
-      if (targetInfo.type === 'enemy') {
-        this.enemyPositions = this.enemyPositions.filter(
-          (pos) => pos.position !== toIndex,
-        );
-      } else {
-        this.playerPositions = this.playerPositions.filter(
-          (pos) => pos.position !== toIndex,
-        );
-      }
+      this.gameState.removeCharacter(toIndex, targetInfo.type);
     }
 
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
       this.redraw();
       this.deselectCharacter();
-      this.updateMaxScore();
 
       if (this.checkGameEnd()) {
         return;
@@ -282,25 +334,24 @@ export default class GameController {
   }
 
   updateScore() {
-    this.gameState.score += 1;
+    this.gameState.addScore(1);
   }
 
   updateMaxScore() {
     if (this.gameState.score > this.gameState.maxScore) {
       this.gameState.maxScore = this.gameState.score;
-      this.gamePlay.showMessage(`НОВЫЙ РЕКОРД! Максимальный счет: ${this.gameState.maxScore}`);
     }
   }
 
   checkGameEnd() {
-    if (this.isGameBlocked) return true;
+    if (this.gameState.isGameBlocked) return true;
 
-    if (this.playerPositions.length === 0) {
+    if (this.gameState.playerPositions.length === 0) {
       this.gameOver('Поражение');
       return true;
     }
 
-    if (this.enemyPositions.length === 0) {
+    if (this.gameState.enemyPositions.length === 0) {
       if (this.gameState.level >= 4) {
         this.gameOver('Победа');
       } else {
@@ -313,7 +364,7 @@ export default class GameController {
   }
 
   blockGame() {
-    this.isGameBlocked = true;
+    this.gameState.setGameBlocked(true);
 
     this.gamePlay.cellClickListeners = [];
     this.gamePlay.cellEnterListeners = [];
@@ -327,9 +378,7 @@ export default class GameController {
   }
 
   gameOver(reason) {
-    this.isGameBlocked = true;
     this.blockGame();
-    this.updateMaxScore();
 
     let message = '';
     if (reason === 'Поражение') {
@@ -349,27 +398,25 @@ export default class GameController {
   levelUp() {
     this.gameState.level += 1;
     const levelBonus = this.gameState.level * 50;
-    this.gameState.score += levelBonus;
+    this.gameState.addScore(levelBonus);
 
     this.gamePlay.showMessage(`УРОВЕНЬ ${this.gameState.level}! Бонус: +${levelBonus} очков`);
 
-    this.levelUpAllSurvivors();
+    // Повышаем уровень выживших персонажей
+    this.gameState.playerPositions.forEach((pos) => {
+      pos.character.levelUp();
+    });
+
     this.updateTheme();
     this.createEnemyTeamForLevel();
     this.deselectCharacter();
     this.gameState.turn = 'player';
   }
 
-  levelUpAllSurvivors() {
-    this.playerPositions.forEach((pos) => {
-      pos.character.levelUp();
-    });
-  }
-
   updateTheme() {
     const theme = getThemeByLevel(this.gameState.level);
     this.gamePlay.drawUi(theme);
-    this.gameState.currentTheme = theme;
+    this.gameState.setTheme(theme);
   }
 
   createEnemyTeamForLevel() {
@@ -460,8 +507,8 @@ export default class GameController {
   computerTurn() {
     setTimeout(() => {
       const action = AdvancedAI.performComputerTurn(
-        this.enemyPositions,
-        this.playerPositions,
+        this.gameState.enemyPositions.map(pos => ({ character: pos.character, position: pos.position })),
+        this.gameState.playerPositions.map(pos => ({ character: pos.character, position: pos.position })),
         8,
       );
 
@@ -479,10 +526,7 @@ export default class GameController {
   }
 
   performComputerMove(fromIndex, toIndex) {
-    const charInfo = this.getCharacterAtPosition(fromIndex);
-    if (!charInfo) return;
-
-    charInfo.positionedChar.position = toIndex;
+    this.gameState.moveCharacter(fromIndex, toIndex);
     this.redraw();
     this.gameState.turn = 'player';
   }
@@ -501,9 +545,7 @@ export default class GameController {
 
     if (isCharacterDead(target)) {
       target.health = 0;
-      this.playerPositions = this.playerPositions.filter(
-        (pos) => pos.position !== toIndex,
-      );
+      this.gameState.removeCharacter(toIndex, targetInfo.type);
       this.gamePlay.showMessage(`Ваш ${target.type} погиб!`);
     }
 
@@ -523,7 +565,6 @@ export default class GameController {
     this.gameState = new GameState();
     this.gameState.maxScore = maxScore;
 
-    this.isGameBlocked = false;
     this.selectedCell = null;
     this.selectedCharacter = null;
     this.attackArea = [];
@@ -541,7 +582,6 @@ export default class GameController {
 
   saveGame() {
     try {
-      this.updateGameState();
       this.stateService.save(this.gameState.toJSON());
       this.gamePlay.showMessage('Игра сохранена!');
     } catch (e) {
@@ -554,7 +594,18 @@ export default class GameController {
       const savedState = this.stateService.load();
       if (savedState) {
         this.gameState = GameState.from(savedState);
-        this.restoreGameState();
+        this.redraw();
+        this.deselectCharacter();
+        this.gamePlay.drawUi(this.gameState.currentTheme);
+
+        // Обновляем команды для совместимости
+        this.playerTeam = {
+          characters: this.gameState.playerPositions.map(p => p.character),
+        };
+        this.enemyTeam = {
+          characters: this.gameState.enemyPositions.map(p => p.character),
+        };
+
         this.gamePlay.showMessage('Игра загружена!');
       }
     } catch (e) {
@@ -563,27 +614,13 @@ export default class GameController {
   }
 
   restoreGameState() {
-    this.playerPositions = this.gameState.playerPositions;
-    this.enemyPositions = this.gameState.enemyPositions;
-
-    this.gamePlay.drawUi(this.gameState.currentTheme);
     this.redraw();
-
     this.deselectCharacter();
-    this.isGameBlocked = false;
-
-    this.playerTeam = {
-      characters: this.playerPositions.map((p) => p.character),
-    };
-    this.enemyTeam = {
-      characters: this.enemyPositions.map((p) => p.character),
-    };
+    this.gamePlay.drawUi(this.gameState.currentTheme);
   }
 
   updateGameState() {
-    this.gameState.playerPositions = [...this.playerPositions];
-    this.gameState.enemyPositions = [...this.enemyPositions];
-    this.gameState.currentTheme = getThemeByLevel(this.gameState.level);
+    // Ничего не делаем, состояние уже обновлено через геттеры/сеттеры
   }
 
   onNewGameClick() {
@@ -602,78 +639,5 @@ export default class GameController {
     if (confirm('Загрузить сохраненную игру? Текущий прогресс будет потерян.')) {
       this.loadGame();
     }
-  }
-
-  getPossibleMoves(positionedChar) {
-    const possibleMoves = [];
-    const { position, character } = positionedChar;
-
-    let maxMove;
-    if (character.type === 'swordsman' || character.type === 'undead') {
-      maxMove = 4;
-    } else if (character.type === 'bowman' || character.type === 'vampire') {
-      maxMove = 2;
-    } else {
-      maxMove = 1;
-    }
-
-    for (let row = -maxMove; row <= maxMove; row++) {
-      for (let col = -maxMove; col <= maxMove; col++) {
-        const newRow = Math.floor(position / 8) + row;
-        const newCol = (position % 8) + col;
-
-        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-          const newIndex = newRow * 8 + newCol;
-          if (!this.isCellOccupied(newIndex)
-              && Math.max(Math.abs(row), Math.abs(col)) <= maxMove) {
-            possibleMoves.push(newIndex);
-          }
-        }
-      }
-    }
-
-    return possibleMoves;
-  }
-
-  findNearestPlayer(enemyPos) {
-    let nearestPlayer = null;
-    let minDistance = Infinity;
-
-    this.playerPositions.forEach((playerPos) => {
-      const distance = Math.abs(
-        Math.floor(enemyPos.position / 8) - Math.floor(playerPos.position / 8),
-      ) + Math.abs(
-        (enemyPos.position % 8) - (playerPos.position % 8),
-      );
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestPlayer = playerPos;
-      }
-    });
-
-    return nearestPlayer;
-  }
-
-  static findBestMoveTowardsTarget(enemyPos, targetPos, possibleMoves) {
-    let bestMove = null;
-    let bestDistance = Infinity;
-
-    const targetIndex = targetPos.position;
-
-    possibleMoves.forEach((moveIndex) => {
-      const distance = Math.abs(
-        Math.floor(moveIndex / 8) - Math.floor(targetIndex / 8),
-      ) + Math.abs(
-        (moveIndex % 8) - (targetIndex % 8),
-      );
-
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestMove = moveIndex;
-      }
-    });
-
-    return bestMove;
   }
 }

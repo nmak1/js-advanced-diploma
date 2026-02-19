@@ -1,37 +1,57 @@
 /**
  * Класс, представляющий персонажей команды
+ * Использует Set для хранения уникальных персонажей
  */
 export default class Team {
   constructor(characters = []) {
-    this.characters = characters;
+    this.characters = new Set(characters);
   }
 
+  /**
+   * Добавляет персонажа в команду
+   * @param {Character} character - персонаж для добавления
+   */
   add(character) {
-    this.characters.push(character);
+    this.characters.add(character);
   }
 
+  /**
+   * Удаляет персонажа из команды
+   * @param {Character} character - персонаж для удаления
+   */
   remove(character) {
-    const index = this.characters.indexOf(character);
-    if (index !== -1) {
-      this.characters.splice(index, 1);
-    }
+    this.characters.delete(character);
   }
 
+  /**
+   * Проверяет, есть ли персонаж в команде
+   * @param {Character} character - персонаж для проверки
+   * @returns {boolean}
+   */
+  has(character) {
+    return this.characters.has(character);
+  }
+
+  /**
+   * Возвращает количество персонажей в команде
+   * @returns {number}
+   */
   get size() {
-    return this.characters.length;
+    return this.characters.size;
   }
 
-  [Symbol.iterator]() {
-    let index = 0;
-    const { characters } = this;
+  /**
+   * Возвращает массив персонажей
+   * @returns {Array}
+   */
+  toArray() {
+    return Array.from(this.characters);
+  }
 
-    return {
-      next() {
-        if (index < characters.length) {
-          return { value: characters[index++], done: false };
-        }
-        return { done: true };
-      },
-    };
+  /**
+   * Итератор для возможности использовать for...of
+   */
+  [Symbol.iterator]() {
+    return this.characters[Symbol.iterator]();
   }
 }
