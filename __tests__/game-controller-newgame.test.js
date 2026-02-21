@@ -2,6 +2,10 @@ import GamePlay from '../src/js/GamePlay';
 import GameStateService from '../src/js/GameStateService';
 import GameController from '../src/js/GameController';
 import GameState from '../src/js/GameState';
+import Team from '../src/js/Team';
+import Bowman from '../src/js/characters/Bowman';
+import Swordsman from '../src/js/characters/Swordsman';
+import Vampire from '../src/js/characters/Vampire';
 
 jest.mock('../src/js/GamePlay');
 jest.mock('../src/js/GameStateService');
@@ -16,7 +20,6 @@ describe('GameController New Game and Game Over', () => {
     stateService = new GameStateService();
     gameController = new GameController(gamePlay, stateService);
 
-    // Мокаем методы экземпляра GamePlay
     gamePlay.drawUi = jest.fn();
     gamePlay.redrawPositions = jest.fn();
     gamePlay.addCellEnterListener = jest.fn();
@@ -33,23 +36,12 @@ describe('GameController New Game and Game Over', () => {
     gamePlay.showCellTooltip = jest.fn();
     gamePlay.hideCellTooltip = jest.fn();
 
-    // Мокаем статические методы GamePlay
-    GamePlay.showError = jest.fn();
-    GamePlay.showMessage = jest.fn();
-
-    // Мокаем console.log чтобы не засорять вывод
     jest.spyOn(console, 'log').mockImplementation(() => {});
-
-    // Мокаем confirm
     global.confirm = jest.fn();
-
-    // Инициализируем игру
-    gameController.createTeams();
-    gameController.positionTeams();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   test('should start new game', () => {
@@ -58,8 +50,8 @@ describe('GameController New Game and Game Over', () => {
     expect(gameController.gameState.level).toBe(1);
     expect(gameController.gameState.turn).toBe('player');
     expect(gameController.gameState.score).toBe(0);
-    expect(gameController.playerPositions.length).toBeGreaterThan(0);
-    expect(gameController.enemyPositions.length).toBeGreaterThan(0);
+    expect(gameController.gameState.playerTeam.size).toBeGreaterThan(0);
+    expect(gameController.gameState.enemyTeam.size).toBeGreaterThan(0);
     expect(gamePlay.drawUi).toHaveBeenCalled();
     expect(gamePlay.redrawPositions).toHaveBeenCalled();
   });
@@ -73,69 +65,91 @@ describe('GameController New Game and Game Over', () => {
   });
 
   test('should show game over when no players left', () => {
-    gameController.playerPositions = [];
+    // Создаем пустую команду игрока через initializeTeams
+    const emptyPlayerTeam = new Team([]);
+    const emptyEnemyTeam = new Team([]);
+    gameController.gameState.initializeTeams(emptyPlayerTeam, emptyEnemyTeam, [], []);
     gameController.gameState.score = 50;
     gameController.gameState.maxScore = 100;
 
+    // Шпионим за методом gameOver, но не мокаем его, чтобы он выполнился
+    const gameOverSpy = jest.spyOn(gameController, 'gameOver');
+
     const result = gameController.checkGameEnd();
 
     expect(result).toBe(true);
-    expect(gamePlay.showMessage).toHaveBeenCalled();
-    expect(gameController.isGameBlocked).toBe(true);
+    expect(gameOverSpy).toHaveBeenCalledWith('Поражение');
+    expect(gameController.gameState.isGameBlocked).toBe(true);
   });
 
   test('should level up when no enemies left and level < 4', () => {
-    // Устанавливаем уровень 2
+    // Создаем команду игрока с персонажем
+    const swordsman = new Swordsman(1);
+    const playerTeam = new Team([swordsman]);
+
+    // Создаем пустую команду врагов
+    const emptyEnemyTeam = new Team([]);
+
+    // Создаем позиции для игрока
+    const playerPositions = [
+      { character: swordsman, position: 0 },
+    ];
+
     gameController.gameState.level = 2;
-    // Очищаем врагов
-    gameController.enemyPositions = [];
+    gameController.gameState.initializeTeams(playerTeam, emptyEnemyTeam, playerPositions, []);
 
-    // Мокаем levelUp, чтобы проверить вызов
-    const levelUpMock = jest.fn();
-    gameController.levelUp = levelUpMock;
+    // Шпионим за методом levelUp
+    const levelUpSpy = jest.spyOn(gameController, 'levelUp');
 
-    // Мокаем gameOver, чтобы убедиться, что он не вызывается
-    const gameOverMock = jest.fn();
-    gameController.gameOver = gameOverMock;
+    // Шпионим за методом gameOver, чтобы убедиться, что он не вызывается
+    const gameOverSpy = jest.spyOn(gameController, 'gameOver');
 
     const result = gameController.checkGameEnd();
 
     expect(result).toBe(true);
-    expect(levelUpMock).toHaveBeenCalled();
-    expect(gameOverMock).not.toHaveBeenCalled();
+    expect(levelUpSpy).toHaveBeenCalled();
+    expect(gameOverSpy).not.toHaveBeenCalled();
   });
 
   test('should show victory when level 4 completed', () => {
-    // Устанавливаем уровень 4
+    // Создаем команду игрока с персонажем
+    const swordsman = new Swordsman(1);
+    const playerTeam = new Team([swordsman]);
+
+    // Создаем пустую команду врагов
+    const emptyEnemyTeam = new Team([]);
+
+    // Создаем позиции для игрока
+    const playerPositions = [
+      { character: swordsman, position: 0 },
+    ];
+
     gameController.gameState.level = 4;
-    // Очищаем врагов
-    gameController.enemyPositions = [];
+    gameController.gameState.initializeTeams(playerTeam, emptyEnemyTeam, playerPositions, []);
 
-    // Мокаем gameOver, чтобы проверить вызов
-    const gameOverMock = jest.fn();
-    gameController.gameOver = gameOverMock;
+    // Шпионим за методом gameOver
+    const gameOverSpy = jest.spyOn(gameController, 'gameOver');
 
-    // Мокаем levelUp, чтобы убедиться, что он не вызывается
-    const levelUpMock = jest.fn();
-    gameController.levelUp = levelUpMock;
+    // Шпионим за методом levelUp, чтобы убедиться, что он не вызывается
+    const levelUpSpy = jest.spyOn(gameController, 'levelUp');
 
     const result = gameController.checkGameEnd();
 
     expect(result).toBe(true);
-    expect(gameOverMock).toHaveBeenCalledWith('Победа');
-    expect(levelUpMock).not.toHaveBeenCalled();
+    expect(gameOverSpy).toHaveBeenCalledWith('Победа');
+    expect(levelUpSpy).not.toHaveBeenCalled();
   });
 
   test('should block game on game over', () => {
     gameController.gameOver('Тест');
 
-    expect(gameController.isGameBlocked).toBe(true);
+    expect(gameController.gameState.isGameBlocked).toBe(true);
     expect(gamePlay.setCursor).toHaveBeenCalledWith('default');
     expect(gamePlay.showMessage).toHaveBeenCalled();
   });
 
   test('should not allow moves when game is blocked', () => {
-    gameController.isGameBlocked = true;
+    gameController.gameState.setGameBlocked(true);
 
     gameController.onCellClick(0);
 
@@ -143,9 +157,16 @@ describe('GameController New Game and Game Over', () => {
   });
 
   test('should save game', () => {
-    gameController.gameState = new GameState();
+    // Создаем тестовые данные
+    const swordsman = new Swordsman(1);
+    const playerTeam = new Team([swordsman]);
+    const enemyTeam = new Team([]);
+    const playerPositions = [{ character: swordsman, position: 0 }];
+
+    gameController.gameState.initializeTeams(playerTeam, enemyTeam, playerPositions, []);
     gameController.gameState.score = 50;
     gameController.gameState.maxScore = 100;
+
     gameController.saveGame();
 
     expect(stateService.save).toHaveBeenCalled();
@@ -155,11 +176,12 @@ describe('GameController New Game and Game Over', () => {
   test('should load game', () => {
     const savedState = {
       level: 2,
+      turn: 'player',
       score: 30,
       maxScore: 100,
+      currentTheme: 'prairie',
       playerPositions: [],
       enemyPositions: [],
-      currentTheme: 'prairie',
     };
     stateService.load.mockReturnValue(savedState);
 
@@ -201,49 +223,49 @@ describe('GameController New Game and Game Over', () => {
 
   test('should handle new game button click with confirmation', () => {
     global.confirm.mockReturnValue(true);
-    gameController.newGame = jest.fn();
+    const newGameSpy = jest.spyOn(gameController, 'newGame');
 
     gameController.onNewGameClick();
 
     expect(global.confirm).toHaveBeenCalled();
-    expect(gameController.newGame).toHaveBeenCalled();
+    expect(newGameSpy).toHaveBeenCalled();
   });
 
   test('should not start new game if cancelled', () => {
     global.confirm.mockReturnValue(false);
-    gameController.newGame = jest.fn();
+    const newGameSpy = jest.spyOn(gameController, 'newGame');
 
     gameController.onNewGameClick();
 
     expect(global.confirm).toHaveBeenCalled();
-    expect(gameController.newGame).not.toHaveBeenCalled();
+    expect(newGameSpy).not.toHaveBeenCalled();
   });
 
   test('should handle save game button click', () => {
-    gameController.saveGame = jest.fn();
+    const saveGameSpy = jest.spyOn(gameController, 'saveGame');
 
     gameController.onSaveGameClick();
 
-    expect(gameController.saveGame).toHaveBeenCalled();
+    expect(saveGameSpy).toHaveBeenCalled();
   });
 
   test('should handle load game button click with confirmation', () => {
     global.confirm.mockReturnValue(true);
-    gameController.loadGame = jest.fn();
+    const loadGameSpy = jest.spyOn(gameController, 'loadGame');
 
     gameController.onLoadGameClick();
 
     expect(global.confirm).toHaveBeenCalled();
-    expect(gameController.loadGame).toHaveBeenCalled();
+    expect(loadGameSpy).toHaveBeenCalled();
   });
 
   test('should not load game if cancelled', () => {
     global.confirm.mockReturnValue(false);
-    gameController.loadGame = jest.fn();
+    const loadGameSpy = jest.spyOn(gameController, 'loadGame');
 
     gameController.onLoadGameClick();
 
     expect(global.confirm).toHaveBeenCalled();
-    expect(gameController.loadGame).not.toHaveBeenCalled();
+    expect(loadGameSpy).not.toHaveBeenCalled();
   });
 });

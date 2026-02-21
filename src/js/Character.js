@@ -4,13 +4,9 @@
  * @property attack - показатель атаки
  * @property defence - показатель защиты
  * @property health - здоровье персонажа
- * @property type - строка с одним из допустимых значений:
- * swordsman
- * bowman
- * magician
- * daemon
- * undead
- * vampire
+ * @property type - строка с одним из допустимых значений
+ * @property moveRange - дальность перемещения
+ * @property attackRange - дальность атаки
  */
 export default class Character {
   constructor(level, type = 'generic') {
@@ -23,14 +19,18 @@ export default class Character {
     this.defence = 0;
     this.health = 50;
     this.type = type;
+    this.moveRange = 0;
+    this.attackRange = 0;
   }
 
   /**
    * Инициализация базовых характеристик (должна вызываться из конструкторов наследников)
    */
-  initStats(attack, defence) {
+  initStats(attack, defence, moveRange, attackRange) {
     this.attack = attack;
     this.defence = defence;
+    this.moveRange = moveRange;
+    this.attackRange = attackRange;
   }
 
   /**

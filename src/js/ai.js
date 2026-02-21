@@ -1,9 +1,6 @@
 import {
   calculateDamage,
   getDistance,
-  getAttackRange,
-  getMoveRange,
-  canAttack,
 } from './utils';
 
 /**
@@ -57,6 +54,14 @@ export default class AdvancedAI {
   }
 
   /**
+   * Проверяет возможность атаки
+   */
+  static canAttack(fromIndex, toIndex, attacker, boardSize = 8) {
+    const distance = getDistance(fromIndex, toIndex, boardSize);
+    return distance <= attacker.attackRange;
+  }
+
+  /**
    * Находит лучшую цель для атаки
    */
   static findBestAttackAction(enemyPos, playerPositions, boardSize) {
@@ -65,7 +70,7 @@ export default class AdvancedAI {
     let bestScore = -Infinity;
 
     playerPositions.forEach((playerPos) => {
-      if (canAttack(position, playerPos.position, character.type, boardSize)) {
+      if (this.canAttack(position, playerPos.position, character, boardSize)) {
         const score = this.calculateAttackScore(character, playerPos.character);
 
         if (score > bestScore) {
@@ -91,20 +96,25 @@ export default class AdvancedAI {
   static calculateAttackScore(attacker, target) {
     let score = 0;
 
+    // Приоритет слабым персонажам (низкое здоровье)
     const healthFactor = (100 - target.health) / 100;
     score += healthFactor * 50;
 
+    // Огромный бонус за возможность убить за один удар
     const potentialDamage = calculateDamage(attacker, target);
     if (potentialDamage >= target.health) {
       score += 100;
     }
 
+    // Бонус за тип персонажа
     const typeBonus = this.getTypeAdvantageBonus(attacker.type, target.type);
     score += typeBonus;
 
+    // Приоритет персонажам с низкой защитой
     const defenseFactor = (100 - target.defence) / 100;
     score += defenseFactor * 20;
 
+    // Приоритет персонажам с высоким уровнем
     score += target.level * 10;
 
     return score;
@@ -156,7 +166,7 @@ export default class AdvancedAI {
     const { position, character } = enemyPos;
     const possibleMoves = this.getPossibleMoves(
       position,
-      character.type,
+      character,
       [...allEnemyPositions, ...playerPositions],
       boardSize,
     );
@@ -203,9 +213,9 @@ export default class AdvancedAI {
   /**
    * Получает все возможные ходы для персонажа
    */
-  static getPossibleMoves(fromIndex, characterType, occupiedPositions, boardSize) {
+  static getPossibleMoves(fromIndex, character, occupiedPositions, boardSize) {
     const possibleMoves = [];
-    const maxMove = getMoveRange(characterType);
+    const maxMove = character.moveRange;
     const fromRow = Math.floor(fromIndex / boardSize);
     const fromCol = fromIndex % boardSize;
 
@@ -232,8 +242,8 @@ export default class AdvancedAI {
   }
 
   /**
- * Оценивает позицию для перемещения
- */
+   * Оценивает позицию для перемещения
+   */
   static evaluateMovePosition(
     character,
     fromPosition,
@@ -245,16 +255,18 @@ export default class AdvancedAI {
   ) {
     let score = 0;
 
+    // Бонус за возможность атаковать с новой позиции
     const attackTargets = playerPositions.filter(
-      (playerPos) => canAttack(
+      (playerPos) => this.canAttack(
         toPosition,
         playerPos.position,
-        character.type,
+        character,
         boardSize,
       ),
     );
     score += attackTargets.length * 50;
 
+    // Оценка целей в радиусе атаки
     attackTargets.forEach((target) => {
       const attackScore = this.calculateAttackScore(
         character,
@@ -263,6 +275,7 @@ export default class AdvancedAI {
       score += attackScore * 0.5;
     });
 
+    // Близость к врагам (зависит от стратегии)
     playerPositions.forEach((playerPos) => {
       const currentDistance = getDistance(
         fromPosition,
@@ -274,9 +287,10 @@ export default class AdvancedAI {
         playerPos.position,
         boardSize,
       );
-      const attackRange = getAttackRange(character.type);
+      const { attackRange } = character;
 
       if (strategy === 'aggressive') {
+        // Агрессивная стратегия: приближаемся к врагам
         if (newDistance < currentDistance) {
           score += 20;
         }
@@ -284,16 +298,19 @@ export default class AdvancedAI {
           score += 30;
         }
       } else if (strategy === 'defensive') {
+        // Защитная стратегия: отдаляемся от врагов
         if (newDistance > currentDistance) {
           score += 15;
         }
       } else if (newDistance <= attackRange) {
+        // Стратегическая: баланс
         score += 25;
       } else if (newDistance <= attackRange + 1) {
         score += 10;
       }
     });
 
+    // Штраф за опасные позиции
     const dangerScore = this.calculateDangerScore(
       toPosition,
       playerPositions,
@@ -302,6 +319,7 @@ export default class AdvancedAI {
     );
     score -= dangerScore * 10;
 
+    // Бонус за позицию рядом с союзниками
     const allyBonus = this.calculateAllyBonus(
       toPosition,
       enemyPositions,
@@ -324,23 +342,24 @@ export default class AdvancedAI {
     let danger = 0;
 
     playerPositions.forEach((playerPos) => {
+      const { character: playerCharacter, position: playerPosition } = playerPos;
       const distance = getDistance(
         position,
-        playerPos.position,
+        playerPosition,
         boardSize,
       );
-      const playerAttackRange = getAttackRange(
-        playerPos.character.type,
-      );
+      const playerAttackRange = playerCharacter.attackRange;
 
       if (distance <= playerAttackRange) {
-        const damagePotential = playerPos.character.attack / 10;
+        // Чем ближе враг, тем опаснее
+        const damagePotential = playerCharacter.attack / 10;
         const rangeBonus = playerAttackRange - distance + 1;
 
         danger += damagePotential * rangeBonus;
 
+        // Если враг может убить нас за один удар, позиция очень опасна
         const potentialDamage = calculateDamage(
-          playerPos.character,
+          playerCharacter,
           character,
         );
 
@@ -367,9 +386,9 @@ export default class AdvancedAI {
       );
 
       if (distance === 1) {
-        bonus += 20;
+        bonus += 20; // Рядом с союзником
       } else if (distance === 2) {
-        bonus += 10;
+        bonus += 10; // Недалеко от союзника
       }
     });
 
@@ -380,18 +399,22 @@ export default class AdvancedAI {
    * Выбирает стратегию поведения
    */
   static selectStrategy(character, healthPercentage) {
+    // Если здоровье низкое - защитная стратегия
     if (healthPercentage < 30) {
       return 'defensive';
     }
 
+    // Маги и демоны используют стратегическую тактику
     if (character.type === 'magician' || character.type === 'daemon') {
       return 'strategic';
     }
 
+    // Мечники и нежить - агрессивные
     if (character.type === 'swordsman' || character.type === 'undead') {
       return 'aggressive';
     }
 
+    // Лучники и вампиры - случайный выбор
     return Math.random() > 0.5 ? 'aggressive' : 'strategic';
   }
 }

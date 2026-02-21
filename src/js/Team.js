@@ -41,6 +41,17 @@ export default class Team {
   }
 
   /**
+   * Повышает уровень всех живых персонажей в команде
+   */
+  levelUpAll() {
+    this.characters.forEach((character) => {
+      if (character.isAlive()) {
+        character.levelUp();
+      }
+    });
+  }
+
+  /**
    * Возвращает массив персонажей
    * @returns {Array}
    */

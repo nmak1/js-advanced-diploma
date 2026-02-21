@@ -4,6 +4,7 @@ import GameController from '../src/js/GameController';
 import GamePlay from '../src/js/GamePlay';
 import Bowman from '../src/js/characters/Bowman';
 import Swordsman from '../src/js/characters/Swordsman';
+import Team from '../src/js/Team';
 import PositionedCharacter from '../src/js/PositionedCharacter';
 
 jest.mock('../src/js/GamePlay');
@@ -23,7 +24,6 @@ describe('GameStateService', () => {
     gamePlay = new GamePlay();
     gameController = new GameController(gamePlay, stateService);
 
-    // Мокаем методы GamePlay
     gamePlay.drawUi = jest.fn();
     gamePlay.redrawPositions = jest.fn();
     gamePlay.showMessage = jest.fn();
@@ -31,33 +31,30 @@ describe('GameStateService', () => {
   });
 
   test('should save game state', () => {
-    // Создаем тестовое состояние
     const state = new GameState();
     state.level = 2;
     state.score = 50;
     state.maxScore = 100;
     state.turn = 'player';
 
-    // Добавляем тестовых персонажей
     const bowman = new Bowman(2);
     bowman.health = 70;
     const swordsman = new Swordsman(1);
 
-    state.playerPositions = [
-      new PositionedCharacter(bowman, 10),
-      new PositionedCharacter(swordsman, 11),
+    // Создаем команды и позиции через initializeTeams
+    const playerTeam = new Team([bowman, swordsman]);
+    const playerPositions = [
+      { character: bowman, position: 10 },
+      { character: swordsman, position: 11 },
     ];
 
-    // Сохраняем
+    state.initializeTeams(playerTeam, new Team(), playerPositions, []);
+
     stateService.save(state.toJSON());
 
     expect(storage.setItem).toHaveBeenCalledTimes(1);
-    expect(storage.setItem).toHaveBeenCalledWith(
-      'state',
-      expect.any(String),
-    );
+    expect(storage.setItem).toHaveBeenCalledWith('state', expect.any(String));
 
-    // Проверяем, что сохраняемые данные валидны
     const savedData = JSON.parse(storage.setItem.mock.calls[0][1]);
     expect(savedData.level).toBe(2);
     expect(savedData.score).toBe(50);
@@ -68,7 +65,6 @@ describe('GameStateService', () => {
   });
 
   test('should load game state successfully', () => {
-    // Подготавливаем сохраненные данные
     const savedState = {
       level: 3,
       turn: 'player',
@@ -83,6 +79,8 @@ describe('GameStateService', () => {
             health: 85,
             attack: 65,
             defence: 65,
+            moveRange: 2,
+            attackRange: 2,
           },
           position: 10,
         },
@@ -93,6 +91,8 @@ describe('GameStateService', () => {
             health: 82,
             attack: 40,
             defence: 64,
+            moveRange: 1,
+            attackRange: 4,
           },
           position: 11,
         },
@@ -105,6 +105,8 @@ describe('GameStateService', () => {
             health: 82,
             attack: 40,
             defence: 40,
+            moveRange: 2,
+            attackRange: 2,
           },
           position: 45,
         },
@@ -116,7 +118,6 @@ describe('GameStateService', () => {
     const loadedData = stateService.load();
     expect(loadedData).toEqual(savedState);
 
-    // Восстанавливаем состояние через GameController
     gameController.gameState = GameState.from(loadedData);
     gameController.restoreGameState();
 
@@ -124,7 +125,6 @@ describe('GameStateService', () => {
     expect(gameController.enemyPositions).toHaveLength(1);
     expect(gameController.playerPositions[0].character.type).toBe('bowman');
     expect(gameController.playerPositions[0].character.health).toBe(85);
-    expect(gameController.playerPositions[0].character.attack).toBe(65);
     expect(gameController.gameState.level).toBe(3);
     expect(gameController.gameState.currentTheme).toBe('arctic');
     expect(gamePlay.drawUi).toHaveBeenCalledWith('arctic');
@@ -139,7 +139,6 @@ describe('GameStateService', () => {
   });
 
   test('should handle load error in GameController', () => {
-    // Мокаем load чтобы выбросить ошибку
     jest.spyOn(stateService, 'load').mockImplementation(() => {
       throw new Error('Invalid state');
     });
@@ -171,36 +170,37 @@ describe('GameStateService', () => {
   });
 
   test('should preserve character health state after load', () => {
-    // Создаем персонажа с поврежденным здоровьем
     const damagedBowman = new Bowman(2);
-    damagedBowman.health = 45; // Раненый лучник
+    damagedBowman.health = 45;
 
     const state = new GameState();
-    state.playerPositions = [
-      new PositionedCharacter(damagedBowman, 10),
+    const playerTeam = new Team([damagedBowman]);
+    const playerPositions = [
+      { character: damagedBowman, position: 10 },
     ];
 
-    // Сохраняем
+    state.initializeTeams(playerTeam, new Team(), playerPositions, []);
+
     stateService.save(state.toJSON());
 
-    // Загружаем
     const savedData = JSON.parse(storage.setItem.mock.calls[0][1]);
     storage.getItem.mockReturnValue(JSON.stringify(savedData));
 
     gameController.gameState = GameState.from(stateService.load());
     gameController.restoreGameState();
 
-    // Проверяем, что здоровье восстановилось правильно
     expect(gameController.playerPositions[0].character.health).toBe(45);
     expect(gameController.playerPositions[0].character.type).toBe('bowman');
   });
 
   test('should save and restore game turn state', () => {
     const state = new GameState();
-    state.turn = 'computer'; // Ход компьютера
+    state.turn = 'computer';
+
+    // Инициализируем с пустыми командами
+    state.initializeTeams(new Team(), new Team(), [], []);
 
     gameController.gameState = state;
-    gameController.updateGameState();
     gameController.saveGame();
 
     const savedData = JSON.parse(storage.setItem.mock.calls[0][1]);

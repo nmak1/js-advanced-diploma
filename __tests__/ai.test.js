@@ -29,11 +29,10 @@ describe('Advanced AI Tests', () => {
 
       const score = AdvancedAI.calculateAttackScore(attacker, target);
 
-      expect(score).toBeGreaterThan(100); // Должен быть большой бонус за возможность добить
+      expect(score).toBeGreaterThan(100);
     });
 
     test('should consider type advantages', () => {
-      // Мечник силен против Нежити
       const attacker = {
         type: 'swordsman', attack: 40, defence: 10, health: 50,
       };
@@ -53,13 +52,8 @@ describe('Advanced AI Tests', () => {
 
   describe('getTypeAdvantageBonus', () => {
     test('should return bonus for type advantage', () => {
-      // Мечник против Нежити
       expect(AdvancedAI.getTypeAdvantageBonus('swordsman', 'undead')).toBe(30);
-
-      // Маг против Демона
       expect(AdvancedAI.getTypeAdvantageBonus('magician', 'daemon')).toBe(40);
-
-      // Нет преимущества
       expect(AdvancedAI.getTypeAdvantageBonus('swordsman', 'vampire')).toBe(0);
     });
   });
@@ -67,7 +61,7 @@ describe('Advanced AI Tests', () => {
   describe('selectStrategy', () => {
     test('should select defensive strategy for low health', () => {
       const character = { type: 'swordsman', health: 20 };
-      const strategy = AdvancedAI.selectStrategy(character, 20); // 20% здоровья
+      const strategy = AdvancedAI.selectStrategy(character, 20);
 
       expect(strategy).toBe('defensive');
     });
@@ -108,7 +102,7 @@ describe('Advanced AI Tests', () => {
     test('should select target with highest score', () => {
       const enemyPos = {
         character: {
-          type: 'swordsman', attack: 40, defence: 10, health: 50,
+          type: 'swordsman', attack: 40, defence: 10, health: 50, attackRange: 1, moveRange: 4,
         },
         position: 9,
       };
@@ -120,7 +114,7 @@ describe('Advanced AI Tests', () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result.target.character.type).toBe('vampire'); // Должен выбрать вампира (низкое здоровье)
+      expect(result.target.character.type).toBe('vampire');
       expect(result.type).toBe('attack');
     });
   });
@@ -128,23 +122,28 @@ describe('Advanced AI Tests', () => {
   describe('getPossibleMoves', () => {
     test('should return valid moves for swordsman', () => {
       const fromIndex = 0;
-      const characterType = 'swordsman';
+      const character = {
+        type: 'swordsman',
+        moveRange: 4,
+      };
       const occupiedPositions = [
-        { position: 0 },
         { position: 1 },
+        { position: 8 },
+        { position: 9 },
       ];
 
       const moves = AdvancedAI.getPossibleMoves(
         fromIndex,
-        characterType,
+        character,
         occupiedPositions,
         8,
       );
 
-      // Должен вернуть массив возможных ходов (не включая занятые клетки)
       expect(Array.isArray(moves)).toBe(true);
-      expect(moves).not.toContain(0); // Начальная позиция
-      expect(moves).not.toContain(1); // Занятая клетка
+      expect(moves).not.toContain(0);
+      expect(moves).not.toContain(1);
+      expect(moves).not.toContain(8);
+      expect(moves).not.toContain(9);
     });
   });
 });

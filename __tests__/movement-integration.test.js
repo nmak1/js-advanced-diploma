@@ -1,22 +1,20 @@
 import GameController from '../src/js/GameController';
 import GamePlay from '../src/js/GamePlay';
 import GameStateService from '../src/js/GameStateService';
-
-// Теперь импортируем мок
+import GameState from '../src/js/GameState';
+import Team from '../src/js/Team';
+import Swordsman from '../src/js/characters/Swordsman';
+import Bowman from '../src/js/characters/Bowman';
+import Vampire from '../src/js/characters/Vampire';
 import * as utils from '../src/js/utils';
 
-// Мокаем только внешние зависимости
 jest.mock('../src/js/GamePlay');
 jest.mock('../src/js/GameStateService');
-
-// Мокаем утилиты - создаем мок перед импортом
 jest.mock('../src/js/utils', () => ({
   formatCharacterInfo: jest.fn(),
   canMove: jest.fn(),
   canAttack: jest.fn(),
   getDistance: jest.fn(),
-  getMoveRange: jest.fn(),
-  getAttackRange: jest.fn(),
 }));
 
 describe('Task 6 - Movement Integration', () => {
@@ -35,147 +33,116 @@ describe('Task 6 - Movement Integration', () => {
     mockGamePlay.selectCell = jest.fn();
     mockGamePlay.deselectCell = jest.fn();
     mockGamePlay.showError = jest.fn();
+    mockGamePlay.showMessage = jest.fn();
     mockGamePlay.showCellTooltip = jest.fn();
     mockGamePlay.hideCellTooltip = jest.fn();
     mockGamePlay.setCursor = jest.fn();
     mockGamePlay.showDamage = jest.fn().mockReturnValue(Promise.resolve());
 
     gameController = new GameController(mockGamePlay, mockStateService);
+    gameController.gameState = new GameState();
 
-    // Создаем тестовые данные
-    gameController.playerPositions = [
-      {
-        character: {
-          type: 'swordsman', attack: 40, defence: 10, health: 50, level: 1,
-        },
-        position: 0,
-      },
-      {
-        character: {
-          type: 'bowman', attack: 25, defence: 25, health: 50, level: 1,
-        },
-        position: 8,
-      },
+    // Создаем настоящие экземпляры персонажей
+    const swordsman = new Swordsman(1);
+    const bowman = new Bowman(1);
+    const vampire = new Vampire(1);
+
+    // Создаем позиции
+    const playerPositions = [
+      { character: swordsman, position: 0 },
+      { character: bowman, position: 8 },
     ];
 
-    gameController.enemyPositions = [
-      {
-        character: {
-          type: 'vampire', attack: 25, defence: 25, health: 50, level: 1,
-        },
-        position: 14,
-      },
+    const enemyPositions = [
+      { character: vampire, position: 14 },
     ];
 
-    // Мок функции getCharacterAtPosition
+    // Инициализируем состояние
+    gameController.initializeTestState(playerPositions, enemyPositions);
+
     gameController.getCharacterAtPosition = jest.fn((index) => {
-      if (index === 0) {
-        return {
-          character: gameController.playerPositions[0].character,
-          type: 'player',
-          positionedChar: gameController.playerPositions[0],
-        };
-      }
-      if (index === 8) {
-        return {
-          character: gameController.playerPositions[1].character,
-          type: 'player',
-          positionedChar: gameController.playerPositions[1],
-        };
-      }
-      if (index === 14) {
-        return {
-          character: gameController.enemyPositions[0].character,
-          type: 'enemy',
-          positionedChar: gameController.enemyPositions[0],
-        };
-      }
-      return null;
+      return gameController.gameState.getCharacterAt(index);
     });
 
-    gameController.isCellOccupied = jest.fn((index) => index === 0 || index === 8 || index === 14);
+    gameController.isCellOccupied = jest.fn((index) => {
+      return gameController.gameState.isCellOccupied(index);
+    });
 
     gameController.redraw = jest.fn();
     gameController.computerTurn = jest.fn();
 
-    // Сбрасываем моки перед каждым тестом
     jest.clearAllMocks();
   });
 
   test('should move swordsman 4 cells', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Клетка 4 должна быть доступна (расстояние 4)
-    utils.canMove.mockReturnValue(true);
+    // Настраиваем мок для getDistance
+    utils.getDistance.mockReturnValue(4);
 
     gameController.performMove(0, 4);
 
-    // Проверяем, что позиция обновилась
-    expect(gameController.playerPositions[0].position).toBe(4);
+    expect(gameController.gameState.getCharacterPosition(
+      gameController.gameState.playerTeam.toArray()[0]
+    )).toBe(4);
     expect(gameController.redraw).toHaveBeenCalled();
     expect(gameController.computerTurn).toHaveBeenCalled();
   });
 
   test('should move bowman 2 cells', () => {
     gameController.selectedCell = 8;
-    gameController.selectedCharacter = { type: 'bowman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[1];
 
-    // Клетка 10 должна быть доступна (расстояние 2)
-    utils.canMove.mockReturnValue(true);
+    utils.getDistance.mockReturnValue(2);
 
     gameController.performMove(8, 10);
 
-    expect(gameController.playerPositions[1].position).toBe(10);
+    expect(gameController.gameState.getCharacterPosition(
+      gameController.gameState.playerTeam.toArray()[1]
+    )).toBe(10);
     expect(gameController.redraw).toHaveBeenCalled();
   });
 
   test('should not move to occupied cell', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Клетка 8 занята другим персонажем
-    utils.canMove.mockReturnValue(false);
-
+    // Клетка 8 занята
     gameController.attemptMove(8);
 
     expect(mockGamePlay.showError).toHaveBeenCalledWith(
       'Невозможно переместиться на эту клетку!',
     );
-    expect(gameController.playerPositions[0].position).toBe(0); // Позиция не изменилась
+    expect(gameController.gameState.getCharacterPosition(
+      gameController.gameState.playerTeam.toArray()[0]
+    )).toBe(0);
   });
 
   test('should calculate movement range correctly', () => {
-    // Тестируем саму функцию canMove из utils
     const testCases = [
-      {
-        type: 'swordsman', from: 0, to: 4, expected: true,
-      }, // расстояние 4
-      {
-        type: 'swordsman', from: 0, to: 5, expected: false,
-      }, // расстояние 5
-      {
-        type: 'bowman', from: 0, to: 2, expected: true,
-      }, // расстояние 2
-      {
-        type: 'bowman', from: 0, to: 3, expected: false,
-      }, // расстояние 3
-      {
-        type: 'magician', from: 0, to: 1, expected: true,
-      }, // расстояние 1
-      {
-        type: 'magician', from: 0, to: 2, expected: false,
-      }, // расстояние 2
+      { type: 'swordsman', from: 0, to: 4, expected: true },  // расстояние 4
+      { type: 'swordsman', from: 0, to: 5, expected: false }, // расстояние 5
+      { type: 'bowman', from: 0, to: 2, expected: true },     // расстояние 2
+      { type: 'bowman', from: 0, to: 3, expected: false },    // расстояние 3
+      { type: 'magician', from: 0, to: 1, expected: true },   // расстояние 1
+      { type: 'magician', from: 0, to: 2, expected: false },  // расстояние 2
     ];
 
-    testCases.forEach(({
-      type, from, to, expected,
-    }) => {
-      // Настраиваем мок для этого тестового случая
-      utils.canMove.mockReturnValue(expected);
+    testCases.forEach(({ type, from, to, expected }) => {
+      // Создаем персонажа с нужными характеристиками
+      const character = {
+        type,
+        moveRange: type === 'swordsman' ? 4 : (type === 'bowman' ? 2 : 1),
+      };
 
       gameController.selectedCell = from;
-      gameController.selectedCharacter = { type };
+      gameController.selectedCharacter = character;
+
+      // Настраиваем мок getDistance
+      utils.getDistance.mockReturnValue(
+        type === 'swordsman' ? (to === 4 ? 4 : 5) : (type === 'bowman' ? (to === 2 ? 2 : 3) : (to === 1 ? 1 : 2))
+      );
 
       const result = gameController.canMove(to);
       expect(result).toBe(expected);
@@ -184,28 +151,24 @@ describe('Task 6 - Movement Integration', () => {
 
   test('should handle movement and turn switching', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Настраиваем мок
-    utils.canMove.mockReturnValue(true);
+    utils.getDistance.mockReturnValue(2);
 
-    // Выполняем перемещение
     gameController.performMove(0, 2);
 
-    // Проверяем, что ход перешел к компьютеру
     expect(gameController.gameState.turn).toBe('computer');
     expect(gameController.computerTurn).toHaveBeenCalled();
   });
 
   test('should deselect character after movement', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    utils.canMove.mockReturnValue(true);
+    utils.getDistance.mockReturnValue(2);
 
     gameController.performMove(0, 2);
 
-    // После перемещения выделение должно сняться
     expect(gameController.selectedCell).toBeNull();
     expect(gameController.selectedCharacter).toBeNull();
   });

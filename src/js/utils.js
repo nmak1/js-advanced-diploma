@@ -79,10 +79,10 @@ export function formatCharacterInfo(character) {
 
 /**
  * Рассчитывает расстояние между двумя ячейками на поле
- * @param fromIndex индекс начальной ячейки
- * @param toIndex индекс целевой ячейки
- * @param boardSize размер поля
- * @returns расстояние по "королевской" метрике
+ * @param {number} fromIndex - индекс начальной ячейки
+ * @param {number} toIndex - индекс целевой ячейки
+ * @param {number} boardSize - размер поля (по умолчанию 8)
+ * @returns {number} - расстояние по "королевской" метрике
  */
 export function getDistance(fromIndex, toIndex, boardSize = 8) {
   const fromRow = Math.floor(fromIndex / boardSize);
@@ -90,7 +90,6 @@ export function getDistance(fromIndex, toIndex, boardSize = 8) {
   const toRow = Math.floor(toIndex / boardSize);
   const toCol = toIndex % boardSize;
 
-  // Расстояние по "королевской" метрике (максимум из разностей по строкам и столбцам)
   return Math.max(Math.abs(fromRow - toRow), Math.abs(fromCol - toCol));
 }
 

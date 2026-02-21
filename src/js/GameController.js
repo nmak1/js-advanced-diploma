@@ -7,14 +7,13 @@ import Vampire from './characters/Vampire';
 import Undead from './characters/Undead';
 import Daemon from './characters/Daemon';
 import { generateTeam } from './generators';
-import PositionedCharacter from './PositionedCharacter';
 import GameState from './GameState';
+import Team from './Team';
 import {
   formatCharacterInfo,
-  canMove,
-  canAttack,
   calculateDamage,
   isCharacterDead,
+  getDistance,
 } from './utils';
 import cursors from './cursors';
 
@@ -22,8 +21,6 @@ export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
     this.stateService = stateService;
-    this.playerTeam = null;
-    this.enemyTeam = null;
     this.selectedCell = null;
     this.selectedCharacter = null;
     this.attackArea = [];
@@ -31,53 +28,29 @@ export default class GameController {
     this.gameState = new GameState();
   }
 
-  // Прокси-свойства для обратной совместимости с тестами
+  // Прокси-свойства для обратной совместимости
   get playerPositions() {
     return this.gameState.playerPositions;
-  }
-
-  set playerPositions(value) {
-    this.gameState.setPlayerPositions(value);
   }
 
   get enemyPositions() {
     return this.gameState.enemyPositions;
   }
 
-  set enemyPositions(value) {
-    this.gameState.setEnemyPositions(value);
-  }
-
   get isGameBlocked() {
     return this.gameState.isGameBlocked;
-  }
-
-  set isGameBlocked(value) {
-    this.gameState.setGameBlocked(value);
   }
 
   get score() {
     return this.gameState.score;
   }
 
-  set score(value) {
-    this.gameState.score = value;
-  }
-
   get maxScore() {
     return this.gameState.maxScore;
   }
 
-  set maxScore(value) {
-    this.gameState.maxScore = value;
-  }
-
   get level() {
     return this.gameState.level;
-  }
-
-  set level(value) {
-    this.gameState.level = value;
   }
 
   get turn() {
@@ -86,6 +59,19 @@ export default class GameController {
 
   set turn(value) {
     this.gameState.turn = value;
+  }
+
+  /**
+   * Метод для тестов - инициализирует состояние с переданными позициями
+   */
+  initializeTestState(playerPositions, enemyPositions) {
+    const playerCharacters = playerPositions.map(p => p.character);
+    const enemyCharacters = enemyPositions.map(p => p.character);
+
+    const playerTeam = new Team(playerCharacters);
+    const enemyTeam = new Team(enemyCharacters);
+
+    this.gameState.initializeTeams(playerTeam, enemyTeam, playerPositions, enemyPositions);
   }
 
   init() {
@@ -110,44 +96,46 @@ export default class GameController {
     const playerTypes = [Bowman, Swordsman, Magician];
     const enemyTypes = [Vampire, Undead, Daemon];
 
-    this.playerTeam = generateTeam(playerTypes, 1, 4);
-    this.enemyTeam = generateTeam(enemyTypes, 1, 4);
+    const playerTeam = generateTeam(playerTypes, 1, 4);
+    const enemyTeam = generateTeam(enemyTypes, 1, 4);
+
+    return { playerTeam, enemyTeam };
   }
 
-  positionTeams() {
+  positionTeams(playerTeam, enemyTeam) {
     const playerColumns = [0, 1];
     const enemyColumns = [6, 7];
     const playerPositions = [];
     const enemyPositions = [];
 
     let playerIndex = 0;
-    this.playerTeam.toArray().forEach((character) => {
+    // Используем toArray() для преобразования Set в массив
+    const playerArray = playerTeam.toArray();
+    for (let i = 0; i < playerArray.length; i++) {
+      const character = playerArray[i];
       const row = Math.floor(playerIndex / 2);
       const col = playerColumns[playerIndex % 2];
       const position = row * 8 + col;
-      playerPositions.push(new PositionedCharacter(character, position));
+      playerPositions.push({ character, position });
       playerIndex++;
-    });
+    }
 
     let enemyIndex = 0;
-    this.enemyTeam.toArray().forEach((character) => {
+    const enemyArray = enemyTeam.toArray();
+    for (let i = 0; i < enemyArray.length; i++) {
+      const character = enemyArray[i];
       const row = Math.floor(enemyIndex / 2);
       const col = enemyColumns[enemyIndex % 2];
       const position = row * 8 + col;
-      enemyPositions.push(new PositionedCharacter(character, position));
+      enemyPositions.push({ character, position });
       enemyIndex++;
-    });
+    }
 
-    this.gameState.setPlayerPositions(playerPositions);
-    this.gameState.setEnemyPositions(enemyPositions);
+    this.gameState.initializeTeams(playerTeam, enemyTeam, playerPositions, enemyPositions);
   }
 
   redraw() {
-    const allPositions = [
-      ...this.gameState.playerPositions,
-      ...this.gameState.enemyPositions,
-    ];
-    this.gamePlay.redrawPositions(allPositions);
+    this.gamePlay.redrawPositions(this.gameState.getAllPositions());
   }
 
   getCharacterAtPosition(index) {
@@ -162,7 +150,8 @@ export default class GameController {
     if (!this.selectedCharacter || this.isCellOccupied(toIndex)) {
       return false;
     }
-    return canMove(this.selectedCell, toIndex, this.selectedCharacter.type);
+    const distance = getDistance(this.selectedCell, toIndex);
+    return distance <= this.selectedCharacter.moveRange;
   }
 
   canAttack(targetIndex) {
@@ -175,7 +164,8 @@ export default class GameController {
       return false;
     }
 
-    return canAttack(this.selectedCell, targetIndex, this.selectedCharacter.type);
+    const distance = getDistance(this.selectedCell, targetIndex);
+    return distance <= this.selectedCharacter.attackRange;
   }
 
   updateSelectedAreas() {
@@ -187,15 +177,7 @@ export default class GameController {
 
     // Обновляем область атаки
     this.attackArea = [];
-    let maxAttack;
-    if (this.selectedCharacter.type === 'swordsman' || this.selectedCharacter.type === 'undead') {
-      maxAttack = 1;
-    } else if (this.selectedCharacter.type === 'bowman' || this.selectedCharacter.type === 'vampire') {
-      maxAttack = 2;
-    } else {
-      maxAttack = 4;
-    }
-
+    const maxAttack = this.selectedCharacter.attackRange;
     const fromRow = Math.floor(this.selectedCell / 8);
     const fromCol = this.selectedCell % 8;
 
@@ -292,7 +274,7 @@ export default class GameController {
     const charInfo = this.getCharacterAtPosition(fromIndex);
     if (!charInfo) return;
 
-    this.gameState.moveCharacter(fromIndex, toIndex);
+    this.gameState.moveCharacterByIndex(fromIndex, toIndex);
     this.deselectCharacter();
     this.redraw();
     this.gameState.addScore(1);
@@ -317,7 +299,7 @@ export default class GameController {
       this.gameState.addScore(target.level * 10);
       this.gamePlay.showMessage(`${target.type} повержен! +${target.level * 10} очков`);
 
-      this.gameState.removeCharacter(toIndex, targetInfo.type);
+      this.gameState.removeCharacter(target);
     }
 
     this.gamePlay.showDamage(toIndex, Math.round(damage)).then(() => {
@@ -346,12 +328,12 @@ export default class GameController {
   checkGameEnd() {
     if (this.gameState.isGameBlocked) return true;
 
-    if (this.gameState.playerPositions.length === 0) {
+    if (this.gameState.playerTeam.size === 0) {
       this.gameOver('Поражение');
       return true;
     }
 
-    if (this.gameState.enemyPositions.length === 0) {
+    if (this.gameState.enemyTeam.size === 0) {
       if (this.gameState.level >= 4) {
         this.gameOver('Победа');
       } else {
@@ -402,10 +384,8 @@ export default class GameController {
 
     this.gamePlay.showMessage(`УРОВЕНЬ ${this.gameState.level}! Бонус: +${levelBonus} очков`);
 
-    // Повышаем уровень выживших персонажей
-    this.gameState.playerPositions.forEach((pos) => {
-      pos.character.levelUp();
-    });
+    // Повышаем уровень всех живых персонажей игрока
+    this.gameState.levelUpPlayerTeam();
 
     this.updateTheme();
     this.createEnemyTeamForLevel();
@@ -426,8 +406,27 @@ export default class GameController {
     const enemyCount = Math.min(baseCount + additionalCount, 8);
     const enemyMaxLevel = Math.min(this.gameState.level, 10);
 
-    this.enemyTeam = generateTeam(enemyTypes, enemyMaxLevel, enemyCount);
-    this.positionTeams();
+    const enemyTeam = generateTeam(enemyTypes, enemyMaxLevel, enemyCount);
+
+    // Позиционируем врагов
+    const enemyColumns = [6, 7];
+    const enemyPositions = [];
+    let enemyIndex = 0;
+
+    for (const character of enemyTeam) {
+      const row = Math.floor(enemyIndex / 2);
+      const col = enemyColumns[enemyIndex % 2];
+      const position = row * 8 + col;
+      enemyPositions.push({ character, position });
+      enemyIndex++;
+    }
+
+    // Обновляем состояние
+    this.gameState.enemyTeam = enemyTeam;
+    enemyPositions.forEach(({ character, position }) => {
+      this.gameState.moveCharacter(character, position);
+    });
+
     this.redraw();
   }
 
@@ -507,8 +506,8 @@ export default class GameController {
   computerTurn() {
     setTimeout(() => {
       const action = AdvancedAI.performComputerTurn(
-        this.gameState.enemyPositions.map(pos => ({ character: pos.character, position: pos.position })),
-        this.gameState.playerPositions.map(pos => ({ character: pos.character, position: pos.position })),
+        this.gameState.enemyPositions,
+        this.gameState.playerPositions,
         8,
       );
 
@@ -526,7 +525,7 @@ export default class GameController {
   }
 
   performComputerMove(fromIndex, toIndex) {
-    this.gameState.moveCharacter(fromIndex, toIndex);
+    this.gameState.moveCharacterByIndex(fromIndex, toIndex);
     this.redraw();
     this.gameState.turn = 'player';
   }
@@ -545,7 +544,7 @@ export default class GameController {
 
     if (isCharacterDead(target)) {
       target.health = 0;
-      this.gameState.removeCharacter(toIndex, targetInfo.type);
+      this.gameState.removeCharacter(target);
       this.gamePlay.showMessage(`Ваш ${target.type} погиб!`);
     }
 
@@ -570,8 +569,8 @@ export default class GameController {
     this.attackArea = [];
     this.moveArea = [];
 
-    this.createTeams();
-    this.positionTeams();
+    const { playerTeam, enemyTeam } = this.createTeams();
+    this.positionTeams(playerTeam, enemyTeam);
 
     const theme = getThemeByLevel(1);
     this.gamePlay.drawUi(theme);
@@ -597,15 +596,6 @@ export default class GameController {
         this.redraw();
         this.deselectCharacter();
         this.gamePlay.drawUi(this.gameState.currentTheme);
-
-        // Обновляем команды для совместимости
-        this.playerTeam = {
-          characters: this.gameState.playerPositions.map(p => p.character),
-        };
-        this.enemyTeam = {
-          characters: this.gameState.enemyPositions.map(p => p.character),
-        };
-
         this.gamePlay.showMessage('Игра загружена!');
       }
     } catch (e) {
@@ -617,10 +607,6 @@ export default class GameController {
     this.redraw();
     this.deselectCharacter();
     this.gamePlay.drawUi(this.gameState.currentTheme);
-  }
-
-  updateGameState() {
-    // Ничего не делаем, состояние уже обновлено через геттеры/сеттеры
   }
 
   onNewGameClick() {

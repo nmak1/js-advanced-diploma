@@ -1,14 +1,15 @@
 import GameController from '../src/js/GameController';
 import GamePlay from '../src/js/GamePlay';
 import GameStateService from '../src/js/GameStateService';
-
+import GameState from '../src/js/GameState';
+import Team from '../src/js/Team';
+import Bowman from '../src/js/characters/Bowman';
+import Swordsman from '../src/js/characters/Swordsman';
+import Vampire from '../src/js/characters/Vampire';
 import * as utils from '../src/js/utils';
 
-// Мокаем только внешние зависимости
 jest.mock('../src/js/GamePlay');
 jest.mock('../src/js/GameStateService');
-
-// Мокаем утилиты
 jest.mock('../src/js/utils', () => ({
   formatCharacterInfo: jest.fn(),
   canMove: jest.fn(),
@@ -16,6 +17,7 @@ jest.mock('../src/js/utils', () => ({
   calculateDamage: jest.fn(),
   isCharacterDead: jest.fn(),
   getAttackArea: jest.fn(),
+  getDistance: jest.fn(),
 }));
 
 describe('Task 7 - Attack Integration', () => {
@@ -34,129 +36,108 @@ describe('Task 7 - Attack Integration', () => {
     mockGamePlay.selectCell = jest.fn();
     mockGamePlay.deselectCell = jest.fn();
     mockGamePlay.showError = jest.fn();
+    mockGamePlay.showMessage = jest.fn();
     mockGamePlay.showCellTooltip = jest.fn();
     mockGamePlay.hideCellTooltip = jest.fn();
     mockGamePlay.setCursor = jest.fn();
     mockGamePlay.showDamage = jest.fn().mockReturnValue(Promise.resolve());
 
     gameController = new GameController(mockGamePlay, mockStateService);
+    gameController.gameState = new GameState();
 
-    // Создаем тестовые данные
-    gameController.playerPositions = [
-      {
-        character: {
-          type: 'swordsman',
-          attack: 40,
-          defence: 10,
-          health: 50,
-          level: 1,
-        },
-        position: 0,
-      },
+    // Создаем настоящие экземпляры персонажей
+    const swordsman = new Swordsman(1);
+    swordsman.attack = 40;
+    swordsman.defence = 10;
+    swordsman.health = 50;
+    swordsman.moveRange = 4;
+    swordsman.attackRange = 1;
+
+    const vampire = new Vampire(1);
+    vampire.attack = 25;
+    vampire.defence = 25;
+    vampire.health = 50;
+    vampire.moveRange = 2;
+    vampire.attackRange = 2;
+
+    // Создаем позиции
+    const playerPositions = [
+      { character: swordsman, position: 0 },
     ];
 
-    gameController.enemyPositions = [
-      {
-        character: {
-          type: 'vampire',
-          attack: 25,
-          defence: 25,
-          health: 50,
-          level: 1,
-        },
-        position: 1, // Соседняя клетка
-      },
+    const enemyPositions = [
+      { character: vampire, position: 1 },
     ];
 
-    // Мок функции getCharacterAtPosition
+    // Инициализируем состояние через метод для тестов
+    gameController.initializeTestState(playerPositions, enemyPositions);
+
     gameController.getCharacterAtPosition = jest.fn((index) => {
-      if (index === 0) {
-        return {
-          character: gameController.playerPositions[0].character,
-          type: 'player',
-          positionedChar: gameController.playerPositions[0],
-        };
-      }
-      if (index === 1) {
-        return {
-          character: gameController.enemyPositions[0].character,
-          type: 'enemy',
-          positionedChar: gameController.enemyPositions[0],
-        };
-      }
-      return null;
+      return gameController.gameState.getCharacterAt(index);
     });
 
-    gameController.isCellOccupied = jest.fn((index) => index === 0 || index === 1);
+    gameController.isCellOccupied = jest.fn((index) => {
+      return gameController.gameState.isCellOccupied(index);
+    });
 
     gameController.redraw = jest.fn();
     gameController.computerTurn = jest.fn();
     gameController.checkGameEnd = jest.fn(() => false);
 
-    // Сбрасываем моки перед каждым тестом
     jest.clearAllMocks();
   });
 
   test('should perform attack when enemy is in range', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = gameController.playerPositions[0].character;
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Настраиваем моки
     utils.canAttack.mockReturnValue(true);
     utils.calculateDamage.mockReturnValue(15);
     utils.isCharacterDead.mockReturnValue(false);
 
-    // Выполняем атаку
     gameController.performAttack(0, 1);
 
-    // Проверяем, что урон был нанесен
-    expect(gameController.enemyPositions[0].character.health).toBe(35); // 50 - 15
+    expect(gameController.gameState.enemyTeam.toArray()[0].health).toBe(35);
     expect(mockGamePlay.showDamage).toHaveBeenCalledWith(1, 15);
   });
 
   test('should kill enemy when health reaches zero', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = gameController.playerPositions[0].character;
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Настраиваем моки для смертельной атаки
-    utils.canAttack.mockReturnValue(true);
-    utils.calculateDamage.mockReturnValue(50); // Достаточно для убийства
-    utils.isCharacterDead.mockReturnValue(true);
-
-    // Выполняем атаку
-    gameController.performAttack(0, 1);
-
-    // Проверяем, что враг удален
-    expect(gameController.enemyPositions.length).toBe(0);
-  });
-
-  test('should update score when killing enemy', () => {
-    gameController.selectedCell = 0;
-    gameController.selectedCharacter = gameController.playerPositions[0].character;
-    gameController.gameState.score = 0;
-
-    // Настраиваем моки
     utils.canAttack.mockReturnValue(true);
     utils.calculateDamage.mockReturnValue(50);
     utils.isCharacterDead.mockReturnValue(true);
 
-    // Выполняем атаку
     gameController.performAttack(0, 1);
 
-    // Проверяем обновление счета (уровень врага 1 * 10 = 10 очков)
+    expect(gameController.gameState.enemyTeam.size).toBe(0);
+  });
+
+  test('should update score when killing enemy', () => {
+    gameController.selectedCell = 0;
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
+    gameController.gameState.score = 0;
+
+    utils.canAttack.mockReturnValue(true);
+    utils.calculateDamage.mockReturnValue(50);
+    utils.isCharacterDead.mockReturnValue(true);
+
+    gameController.performAttack(0, 1);
+
     expect(gameController.gameState.score).toBe(10);
   });
 
   test('should show crosshair cursor when enemy is in attack range', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Враг в радиусе атаки
-    utils.canAttack.mockReturnValue(true);
+    // Настраиваем мок для canAttack
+    jest.spyOn(gameController, 'canAttack').mockReturnValue(true);
 
     gameController.updateCursorForCell(1, {
       type: 'enemy',
-      character: { type: 'vampire' },
+      character: gameController.gameState.enemyTeam.toArray()[0],
     });
 
     expect(mockGamePlay.setCursor).toHaveBeenCalledWith('crosshair');
@@ -165,10 +146,10 @@ describe('Task 7 - Attack Integration', () => {
 
   test('should show error when trying to attack out of range', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Враг вне радиуса атаки
-    utils.canAttack.mockReturnValue(false);
+    // Настраиваем мок для canAttack
+    jest.spyOn(gameController, 'canAttack').mockReturnValue(false);
 
     gameController.attemptAttack(1);
 
@@ -179,28 +160,21 @@ describe('Task 7 - Attack Integration', () => {
 
   test('should not allow attacking own characters', () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = { type: 'swordsman' };
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
-    // Проверяем атаку своего персонажа
     const result = gameController.canAttack(0);
 
     expect(result).toBe(false);
   });
 
   test('should calculate damage correctly', () => {
-    const attacker = {
-      attack: 40, defence: 10, health: 50, level: 1, type: 'swordsman',
-    };
+    gameController.selectedCell = 0;
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
     utils.calculateDamage.mockReturnValue(15);
 
-    gameController.selectedCell = 0;
-    gameController.selectedCharacter = attacker;
-
     gameController.performAttack(0, 1);
 
-    // Проверяем, что функция была вызвана с правильными параметрами
-    // Используем expect.any для свойств, которые могут измениться
     expect(utils.calculateDamage).toHaveBeenCalledWith(
       expect.objectContaining({
         attack: 40,
@@ -216,31 +190,27 @@ describe('Task 7 - Attack Integration', () => {
   });
 
   test('should handle computer attack', () => {
-    // Настраиваем моки для атаки компьютера
     utils.calculateDamage.mockReturnValue(20);
     utils.isCharacterDead.mockReturnValue(false);
 
     gameController.performComputerAttack(1, 0);
 
-    expect(gameController.playerPositions[0].character.health).toBe(30); // 50 - 20
+    expect(gameController.gameState.playerTeam.toArray()[0].health).toBe(30);
     expect(mockGamePlay.showDamage).toHaveBeenCalledWith(0, 20);
   });
 
   test('should switch turn after attack', async () => {
     gameController.selectedCell = 0;
-    gameController.selectedCharacter = gameController.playerPositions[0].character;
+    gameController.selectedCharacter = gameController.gameState.playerTeam.toArray()[0];
 
     utils.canAttack.mockReturnValue(true);
     utils.calculateDamage.mockReturnValue(15);
     utils.isCharacterDead.mockReturnValue(false);
 
-    // Мокаем Promise.resolve для showDamage
     mockGamePlay.showDamage.mockResolvedValue();
 
-    // Выполняем атаку
     await gameController.performAttack(0, 1);
 
-    // Проверяем, что ход перешел к компьютеру
     expect(gameController.gameState.turn).toBe('computer');
   });
 });
